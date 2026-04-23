@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "Delivery": {
+      "title": "Delivery",
+      "description": "A delivery record submitted by a Sales Officer",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date", "description": "Date of delivery" },
+        "soName": { "type": "string", "description": "Name of the Sales Officer" },
+        "route": { "type": "string", "description": "Route name" },
+        "tissue": { "type": "number", "description": "Tissue delivery amount" },
+        "ballpen": { "type": "number", "description": "Ballpen delivery amount" },
+        "exbook": { "type": "number", "description": "Exbook delivery amount" },
+        "userId": { "type": "string", "description": "UID of the user who submitted" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["date", "soName", "route", "tissue", "ballpen", "exbook", "userId"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "uniqueId": { "type": "string" },
+        "role": { "type": "string", "enum": ["so", "admin"] }
+      },
+      "required": ["name", "uniqueId", "role"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance record",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "soName": { "type": "string" },
+        "soId": { "type": "string" },
+        "checkInTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["On Time", "Late", "Absent"] },
+        "location": { "type": "string" },
+        "selfie": { "type": "string", "description": "Base64 encoded photo" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "soName", "soId", "checkInTime", "status"]
+    },
+    "Officer": {
+      "title": "Officer",
+      "description": "A dynamic Sales Officer entity",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "id": { "type": "string", "description": "Numeric unique ID" }
+      },
+      "required": ["name", "id"]
+    }
+  },
+  "firestore": {
+    "/officers/{officerId}": {
+      "schema": "Officer",
+      "description": "Dynamic list of Sales Officers"
+    },
+    "/deliveries/{deliveryId}": {
+      "schema": "Delivery",
+      "description": "Collection of all deliveries"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Daily attendance logs"
+    }
+  }
+}

@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: deliveries
+    // Document ID: auto-generated
+    // Fields:
+    //   - date: string (required, YYYY-MM-DD)
+    //   - soName: string (required)
+    //   - route: string (required)
+    //   - tissue: number (required)
+    //   - ballpen: number (required)
+    //   - exbook: number (required)
+    //   - userId: string (required, matches auth.uid)
+    //   - timestamp: timestamp (required)
+    //
+    // Collection: users
+    // Document ID: auth.uid
+    // Fields:
+    //   - name: string (required)
+    //   - uniqueId: string (required)
+    //   - role: string (required, 'so' or 'admin')
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "miahmdsujon780@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidDelivery(data) {
+      return data.keys().hasAll(['date', 'soName', 'route', 'tissue', 'ballpen', 'exbook', 'userId', 'timestamp', 'soId']) &&
+             data.date is string && data.date.size() == 10 &&
+             data.soName is string && data.soName.size() > 0 && data.soName.size() < 100 &&
+             data.route is string && data.route.size() > 0 && data.route.size() < 200 &&
+             data.tissue is number && data.tissue >= 0 &&
+             data.ballpen is number && data.ballpen >= 0 &&
+             data.exbook is number && data.exbook >= 0 &&
+             data.userId == request.auth.uid &&
+             data.soId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.uniqueId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'uniqueId', 'role']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.uniqueId is string && data.uniqueId.size() > 0 &&
+             data.role in ['so', 'admin'];
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['date', 'soName', 'soId', 'checkInTime', 'status', 'timestamp']) &&
+             data.date is string && data.date.size() == 10 &&
+             data.soName is string &&
+             data.soId is string &&
+             data.checkInTime is string &&
+             data.status in ['On Time', 'Late', 'Absent'] &&
+             (!('location' in data) || data.location is string) &&
+             (!('selfie' in data) || (data.selfie is string && data.selfie.size() < 1200000)) &&
+             data.timestamp is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'so' || 
+                     (request.resource.data.role == 'admin' && request.auth.token.email == "miahmdsujon780@gmail.com" && request.auth.token.email_verified == true));
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+    }
+
+    match /deliveries/{deliveryId} {
+      allow read: if isAuthenticated() && 
+                  (resource.data.soId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.uniqueId || isAdmin());
+      allow create: if isAuthenticated() && isValidDelivery(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidAttendance(request.resource.data) && 
+                    request.resource.data.soId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.uniqueId;
+      allow update, delete: if isAdmin();
+    }
+
+    match /settings/monthly_targets {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /settings/config {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /officer_targets/{officerName} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

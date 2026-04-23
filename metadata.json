@@ -1,0 +1,6 @@
+{
+  "name": "GULAPGONJ TEAM - Delivery App",
+  "description": "A mobile-friendly Sales Delivery Management System for tracking tissue, ballpen, and exbook deliveries with real-time sync and admin monitoring.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": []
+}
