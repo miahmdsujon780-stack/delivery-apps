@@ -178,7 +178,9 @@ const Login = ({ onLoginSuccess }: {
     try {
       // Create a persistent login using Email/Password with dummy email
       const dummyEmail = selectedSO === 'ADMIN' ? ADMIN_EMAIL : `${soId}@gulapgonj.app`;
-      const password = soId; // Use unique ID as password
+      // Firebase requires passwords to be at least 6 characters. 
+      // We'll prepend a prefix to ensure the password is long enough.
+      const password = `GULAPGONJ_${soId}`; 
 
       let user: FirebaseUser;
       try {
