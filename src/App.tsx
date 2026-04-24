@@ -25,9 +25,7 @@ import {
   setDoc,
   deleteDoc,
   updateDoc,
-  writeBatch,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  writeBatch
 } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { SALES_OFFICERS, ADMIN_EMAIL, MONTHLY_TARGETS, GLOBAL_TARGETS } from './constants';
@@ -155,7 +153,7 @@ const Login = ({ onLoginSuccess }: {
   const [soId, setSoId] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleManualLogin = async () => {
+  const handleGoogleLogin = async () => {
     if (!selectedSO || !soId) {
       toast.error("Please select your name and enter your ID");
       return;
@@ -176,38 +174,15 @@ const Login = ({ onLoginSuccess }: {
 
     setLoading(true);
     try {
-      // Create a persistent login using Email/Password with dummy email
-      const dummyEmail = selectedSO === 'ADMIN' ? ADMIN_EMAIL : `${soId}@gulapgonj.app`;
-      // Firebase requires passwords to be at least 6 characters. 
-      // We'll prepend a prefix to ensure the password is long enough.
-      const password = `GULAPGONJ_${soId}`; 
-
-      let user: FirebaseUser;
-      try {
-        // Attempt to sign in
-        const result = await signInWithEmailAndPassword(auth, dummyEmail, password);
-        user = result.user;
-      } catch (signInError: any) {
-        // If user not found, auto-signup (one time)
-        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
-          try {
-            const result = await createUserWithEmailAndPassword(auth, dummyEmail, password);
-            user = result.user;
-          } catch (signUpError) {
-            // If sign-up fails because user exists but password mismatch, it's an error
-            throw signInError;
-          }
-        } else {
-          throw signInError;
-        }
-      }
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
       
-      const isActuallyAdmin = selectedSO === 'ADMIN';
+      const isActuallyAdmin = user.email === ADMIN_EMAIL || selectedSO === 'ADMIN';
 
       const profile: UserProfile = {
         uid: user.uid,
         name: selectedSO,
-        email: dummyEmail,
+        email: user.email || '',
         role: isActuallyAdmin ? 'admin' : 'so',
         uniqueId: soId
       };
@@ -217,7 +192,7 @@ const Login = ({ onLoginSuccess }: {
       toast.success(`Welcome, ${selectedSO}!`);
     } catch (error) {
       console.error(error);
-      toast.error("Login failed. Check your ID and try again.");
+      toast.error("Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -270,7 +245,7 @@ const Login = ({ onLoginSuccess }: {
             
             <div className="space-y-3">
               <Button 
-                onClick={handleManualLogin} 
+                onClick={handleGoogleLogin} 
                 className="w-full h-14 rounded-xl text-lg font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
                 disabled={loading}
               >
