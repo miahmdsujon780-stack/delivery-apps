@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, getDoc, doc, setDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, getDoc, getDocs, doc, setDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 
 // Default placeholder config
 const placeholderConfig = {
@@ -42,6 +42,7 @@ export {
   onSnapshot, 
   serverTimestamp, 
   getDoc, 
+  getDocs,
   doc, 
   setDoc,
   deleteDoc,

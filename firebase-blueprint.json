@@ -23,7 +23,17 @@
       "properties": {
         "name": { "type": "string" },
         "uniqueId": { "type": "string" },
-        "role": { "type": "string", "enum": ["so", "admin"] }
+        "role": { "type": "string", "enum": ["so", "admin"] },
+        "lastLogin": { "type": "string", "format": "date-time" },
+        "assignedLocation": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lon": { "type": "number" },
+            "radius": { "type": "number" },
+            "name": { "type": "string" }
+          }
+        }
       },
       "required": ["name", "uniqueId", "role"]
     },
@@ -52,6 +62,22 @@
         "id": { "type": "string", "description": "Numeric unique ID" }
       },
       "required": ["name", "id"]
+    },
+    "ProductEntry": {
+      "title": "Product Entry",
+      "description": "A product sale/delivery entry submitted from the Product page",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "productName": { "type": "string" },
+        "pieces": { "type": "number" },
+        "value": { "type": "number" },
+        "soName": { "type": "string" },
+        "soId": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "productName", "pieces", "value", "soName", "soId", "userId"]
     }
   },
   "firestore": {
@@ -70,6 +96,10 @@
     "/attendance/{attendanceId}": {
       "schema": "Attendance",
       "description": "Daily attendance logs"
+    },
+    "/product_entries/{entryId}": {
+      "schema": "ProductEntry",
+      "description": "Records of individual product sales/entries"
     }
   }
 }
