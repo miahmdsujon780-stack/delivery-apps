@@ -30,7 +30,7 @@ import {
 } from './firebase';
 import { getDocFromServer } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { SALES_OFFICERS, ADMIN_EMAIL, MONTHLY_TARGETS, GLOBAL_TARGETS } from './constants';
+import { DEALERS, SALES_OFFICERS, ADMIN_EMAIL, MONTHLY_TARGETS, GLOBAL_TARGETS } from './constants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -126,6 +126,7 @@ interface UserProfile {
   email: string;
   role: 'admin' | 'so';
   uniqueId: string;
+  dealerId?: string; // <--- ADDED THIS
   assignedLocation?: {
     lat: number;
     lon: number;
@@ -1590,6 +1591,35 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
 
     setIsSubmitting(true);
     try {
+      if (pieces && Number(pieces) > 0) {
+        const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
+        if (assignedDealer) {
+          const stockQuery = query(
+            collection(db, "stock_items"), 
+            where("name", "==", selectedProduct?.trim() || ""), 
+            where("dealer", "==", assignedDealer.name)
+          );
+          const stockSnap = await getDocs(stockQuery);
+          
+          if (!stockSnap.empty) {
+            const stockDoc = stockSnap.docs[0];
+            const currentQuantity = Number(stockDoc.data().quantity || 0);
+            await updateDoc(doc(db, "stock_items", stockDoc.id), {
+              quantity: currentQuantity - Number(pieces),
+              updatedAt: serverTimestamp()
+            });
+          } else {
+            toast.error("স্টক পাওয়া যায়নি। স্টক আপডেট হয়নি।");
+            setIsSubmitting(false);
+            return;
+          }
+        } else {
+          toast.error("আপনার কোনো ডিলার অ্যাসাইন করা নেই। স্টক আপডেট হয়নি।");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       await addDoc(collection(db, 'product_entries'), {
         date: entryDate,
         route: route || '',
@@ -1622,7 +1652,35 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const handleDeleteRecord = async (id: string) => {
     if (!window.confirm("আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?")) return;
     try {
-      await deleteDoc(doc(db, 'product_entries', id));
+      const record = records.find(r => r.id === id);
+      if (record && record.pieces && !id.includes('_')) {
+        const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
+        if (assignedDealer) {
+          const stockQuery = query(
+            collection(db, "stock_items"), 
+            where("name", "==", record.productName?.trim() || ""), 
+            where("dealer", "==", assignedDealer.name)
+          );
+          const stockSnap = await getDocs(stockQuery);
+          if (!stockSnap.empty) {
+            const stockDoc = stockSnap.docs[0];
+            const currentQuantity = Number(stockDoc.data().quantity || 0);
+            await updateDoc(doc(db, "stock_items", stockDoc.id), {
+              quantity: currentQuantity + Number(record.pieces),
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+      }
+
+      if (id.includes('_')) {
+        const [origId, field] = id.split('_');
+        if (origId && field) {
+          await updateDoc(doc(db, 'deliveries', origId), { [field]: 0 });
+        }
+      } else {
+        await deleteDoc(doc(db, 'product_entries', id));
+      }
       toast.success("রেকর্ডটি মুছে ফেলা হয়েছে");
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'product_entries');
@@ -1637,10 +1695,41 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
 
   const saveEdit = async (id: string) => {
     try {
-      await updateDoc(doc(db, 'product_entries', id), {
-        pieces: Number(editPieces),
-        value: Number(editValue)
-      });
+      if (id.includes('_')) {
+        const [origId, field] = id.split('_');
+        if (origId && field) {
+          // For legacy, value replaces quantity. Pieces are ignored (always 0)
+          await updateDoc(doc(db, 'deliveries', origId), { [field]: Number(editValue) });
+        }
+      } else {
+        const record = records.find(r => r.id === id);
+        if (record && record.pieces) {
+          const difference = Number(editPieces) - Number(record.pieces);
+          if (difference !== 0) {
+            const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
+            if (assignedDealer) {
+              const stockQuery = query(
+                collection(db, "stock_items"), 
+                where("name", "==", record.productName?.trim() || ""), 
+                where("dealer", "==", assignedDealer.name)
+              );
+              const stockSnap = await getDocs(stockQuery);
+              if (!stockSnap.empty) {
+                const stockDoc = stockSnap.docs[0];
+                const currentQuantity = Number(stockDoc.data().quantity || 0);
+                await updateDoc(doc(db, "stock_items", stockDoc.id), {
+                  quantity: currentQuantity - difference,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            }
+          }
+        }
+        await updateDoc(doc(db, 'product_entries', id), {
+          pieces: Number(editPieces),
+          value: Number(editValue)
+        });
+      }
       setEditingId(null);
       toast.success("রেকর্ডটি আপডেট করা হয়েছে");
     } catch (err) {
@@ -1731,10 +1820,27 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
       <div className="mb-6 text-center space-y-4">
         <div>
           <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Our Products</h2>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 mb-4">
             {isAdmin ? 'Product Records • প্রোডাক্ট তথ্য' : 'Delivery summary • ডেলিভারি সামারি'}
           </p>
-          {!isAdmin && (
+          
+          <div className="flex bg-slate-100 p-1 rounded-xl max-w-sm mx-auto mb-4">
+            <button
+               onClick={() => setView('catalog')}
+               hidden={isAdmin}
+               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${view === 'catalog' ? 'bg-white shadow-sm text-primary' : 'text-slate-400'}`}
+            >
+               Order
+            </button>
+            <button
+               onClick={() => setView('records')}
+               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${view === 'records' ? 'bg-white shadow-sm text-primary' : 'text-slate-400'}`}
+            >
+               {isAdmin ? 'All Records' : 'My Records'}
+            </button>
+          </div>
+
+          {!isAdmin && view === 'catalog' && (
             <div className="mt-4 flex flex-col items-center justify-center gap-3">
               <Input 
                  type="date"
@@ -3142,22 +3248,270 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
   );
 };
 
+import { PRODUCTS, DEALERS } from './constants';
+// ... rest of the imports that might be needed, assuming they're already there.
+// Since I cannot view all imports easily I will just use PRODUCTS directly as it's a named import added.
+
+const StockPanel = () => {
+  const [stock, setStock] = useState<any[]>([]);
+  const [name, setName] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [rate, setRate] = useState('');
+  const [dealer, setDealer] = useState(DEALERS[0].name); // Default
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const [inlineQuantity, setInlineQuantity] = useState('');
+  const [inlineRate, setInlineRate] = useState('');
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "stock_items"), (snapshot) => {
+      setStock(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const saveItem = async () => {
+    if (!name || (!quantity && quantity !== '0') || (!rate && rate !== '0')) return;
+    
+    const existingItem = stock.find(
+      s => s.name.trim().toLowerCase() === name.trim().toLowerCase() && s.dealer === dealer
+    );
+
+    try {
+      if (existingItem) {
+        const newQuantity = (Number(existingItem.quantity) || 0) + Number(quantity);
+        await updateDoc(doc(db, "stock_items", existingItem.id), {
+          quantity: newQuantity,
+          rate: Number(rate),
+          updatedAt: serverTimestamp()
+        });
+        toast.success("Existing product updated (+ Quantity)");
+      } else {
+        await addDoc(collection(db, "stock_items"), {
+          name: name.trim(),
+          dealer,
+          quantity: Number(quantity),
+          rate: Number(rate),
+          createdAt: serverTimestamp()
+        });
+        toast.success("New product added");
+      }
+      
+      setName('');
+      setQuantity('');
+      setRate('');
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save item");
+    }
+  };
+
+  const startInlineEdit = (item: any) => {
+    setInlineEditId(item.id);
+    setInlineQuantity(item.quantity?.toString() || '0');
+    setInlineRate(item.rate?.toString() || '0');
+  };
+
+  const saveInlineEdit = async (item: any) => {
+    try {
+      await updateDoc(doc(db, "stock_items", item.id), {
+        quantity: Number(inlineQuantity),
+        rate: Number(inlineRate),
+        updatedAt: serverTimestamp()
+      });
+      setInlineEditId(null);
+      toast.success("Updated successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update");
+    }
+  };
+
+  const deleteItem = async (id: string) => {
+    if (!window.confirm("Are you sure?")) return;
+    try {
+      await deleteDoc(doc(db, "stock_items", id));
+      toast.success("Deleted successfully");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-3xl font-black text-slate-900 uppercase">Stock Inventory</h1>
+      
+      <Card className="p-6 border-slate-100 shadow-sm rounded-2xl bg-white relative z-20">
+        <h2 className="font-bold text-lg mb-4">Add New Item</h2>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div>
+             <input 
+               list="product-suggestions" 
+               value={name} 
+               onChange={(e) => setName(e.target.value)} 
+               placeholder="Item Name" 
+               className="p-2 border rounded-xl w-full"
+             />
+             <datalist id="product-suggestions">
+               {PRODUCTS.filter(p => p.name !== "Total tissue").map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+             </datalist>
+          </div>
+          <select value={dealer} onChange={(e) => setDealer(e.target.value)} className="p-2 border rounded-xl bg-white">
+             {DEALERS.map(d => <option key={d.name} value={d.name}>{d.name} ({d.id})</option>)}
+          </select>
+          <Input type="number" placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+          <Input type="number" placeholder="Rate (৳)" value={rate} onChange={(e) => setRate(e.target.value)} />
+          <div className="flex gap-2">
+            <Button onClick={saveItem} className="bg-slate-900 text-white rounded-xl flex-grow">Add</Button>
+          </div>
+        </div>
+      </Card>
+      
+      {DEALERS.map(d => (
+        <div key={d.id} className="space-y-4">
+          <h2 className="text-2xl font-black text-slate-700">{d.name} ({d.id})</h2>
+          <div className="bg-white overflow-hidden shadow-sm border border-slate-100 rounded-2xl">
+            <div className="overflow-x-auto overflow-y-visible">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-700 uppercase bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3">Item</th>
+                    <th className="px-4 py-3">Quantity</th>
+                    <th className="px-4 py-3">Rate</th>
+                    <th className="px-4 py-3">Value</th>
+                    <th className="px-4 py-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stock
+                    .filter(item => item.dealer === d.name)
+                    .sort((a, b) => {
+                       const indexA = PRODUCTS.findIndex(p => p.name === a.name);
+                       const indexB = PRODUCTS.findIndex(p => p.name === b.name);
+                       return (indexA > -1 ? indexA : 999) - (indexB > -1 ? indexB : 999);
+                    })
+                    .map(item => (
+                    <tr key={item.id} className="bg-white border-b border-slate-100">
+                      <td className="px-4 py-4 font-bold">{item.name}</td>
+                      <td className="px-4 py-4">
+                        {inlineEditId === item.id ? (
+                          <input type="number" 
+                                 value={inlineQuantity} 
+                                 onChange={e => setInlineQuantity(e.target.value)} 
+                                 className="w-20 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10" />
+                        ) : item.quantity}
+                      </td>
+                      <td className="px-4 py-4">
+                        {inlineEditId === item.id ? (
+                          <div className="flex items-center">
+                            <span className="mr-1">৳</span>
+                            <input type="number" 
+                                   value={inlineRate} 
+                                   onChange={e => setInlineRate(e.target.value)} 
+                                   className="w-20 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10" />
+                          </div>
+                        ) : `৳${item.rate}`}
+                      </td>
+                      <td className="px-4 py-4 font-black text-primary">৳{((item.quantity || 0) * (item.rate || 0)).toLocaleString()}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex gap-2">
+                          {inlineEditId === item.id ? (
+                            <>
+                              <Button onClick={() => saveInlineEdit(item)} className="text-xs h-8 bg-primary text-white rounded-lg">Save</Button>
+                              <Button onClick={() => setInlineEditId(null)} className="text-xs h-8 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg">Cancel</Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button onClick={() => startInlineEdit(item)} className="text-xs h-8 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg">Edit</Button>
+                              <Button onClick={() => deleteItem(item.id)} className="text-xs h-8 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg">Delete</Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const OfficerManager = () => {
+  const [personnel, setPersonnel] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, 'users')), (snapshot) => {
+      setPersonnel(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleDealerChange = async (uid: string, dealerId: string) => {
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        dealerId: dealerId
+      });
+      toast.success("Dealer assigned successfully");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to assign dealer");
+    }
+  };
+
+  return (
+    <div className="bg-slate-50 min-h-screen p-6">
+      <h3 className="text-xl font-black uppercase text-slate-800 mb-6 tracking-tight">Officer Profiles</h3>
+      {loading ? (
+        <p className="text-sm text-slate-500 font-bold">Loading officers...</p>
+      ) : personnel.length === 0 ? (
+        <p className="text-sm text-slate-500 font-bold">No officers found.</p>
+      ) : (
+        <div className="space-y-4">
+          {personnel.map(so => (
+            <div key={so.uid} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h4 className="font-black text-slate-900">{so.name || "Unknown"}</h4>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                  ID: {so.uniqueId || "N/A"} • Email: {so.email}
+                </p>
+              </div>
+              <div className="w-full sm:w-auto">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Assigned Dealer</Label>
+                <select 
+                  className="w-full sm:w-64 p-2 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white transition-colors"
+                  value={so.dealerId || ''}
+                  onChange={(e) => handleDealerChange(so.uid, e.target.value)}
+                >
+                  <option value="">-- No Dealer Assigned --</option>
+                  {DEALERS.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.id})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminPanel = () => {
   const [legacyEntries, setLegacyEntries] = useState<any[]>([]);
   const [productGroups, setProductGroups] = useState<any[]>([]);
   
   const allEntries = useMemo(() => {
-    const merged = [...legacyEntries, ...productGroups];
-    return merged.sort((a, b) => {
-      // Sort by date descending
-      if (b.date !== a.date) return b.date.localeCompare(a.date);
-      // Secondary sort by timestamp if available
-      return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
-    });
+    return [...legacyEntries, ...productGroups];
   }, [legacyEntries, productGroups]);
   
   const [filterSO, setFilterSO] = useState('all');
   const [filterDate, setFilterDate] = useState('');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<DeliveryEntry>>({});
   
@@ -3354,12 +3708,23 @@ const AdminPanel = () => {
   };
 
   const filtered = useMemo(() => {
-    return allEntries.filter(e => {
+    const list = allEntries.filter(e => {
       const matchSO = filterSO === 'all' || e.soName === filterSO;
       const matchDate = !filterDate || e.date === filterDate;
       return matchSO && matchDate;
     });
-  }, [allEntries, filterSO, filterDate]);
+
+    return list.sort((a, b) => {
+      const dA = a.date || "";
+      const dB = b.date || "";
+      if (dA !== dB) {
+        return sortOrder === 'asc' ? dA.localeCompare(dB) : dB.localeCompare(dA);
+      }
+      const tA = a.timestamp?.seconds || 0;
+      const tB = b.timestamp?.seconds || 0;
+      return sortOrder === 'asc' ? tA - tB : tB - tA;
+    });
+  }, [allEntries, filterSO, filterDate, sortOrder]);
 
   const statistics = useMemo(() => {
     const yesterday = format(new Date(getBDDate().getTime() - 86400000), 'yyyy-MM-dd');
@@ -3415,10 +3780,12 @@ const AdminPanel = () => {
     }
   };
 
+  const [adminTab, setAdminTab] = useState<'logs' | 'officers'>('logs');
+
   return (
     <div className="space-y-0 -mt-6">
       <Card className="border-none shadow-none bg-slate-950 text-white rounded-none overflow-hidden">
-        <CardHeader className="py-8 px-6">
+        <CardHeader className="py-8 px-6 pb-2">
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 mb-1">
@@ -3431,59 +3798,89 @@ const AdminPanel = () => {
                 </CardTitle>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+          </div>
+        </CardHeader>
+        <div className="px-6 pb-6 pt-2 flex gap-4 border-b border-slate-800">
+          <button 
+            className={`text-xs font-black uppercase tracking-widest pb-2 border-b-2 transition-all ${adminTab === 'logs' ? 'text-white border-white' : 'text-slate-400 hover:text-white border-transparent'}`}
+            onClick={() => setAdminTab('logs')}
+          >
+            Master Logs
+          </button>
+          <button 
+            className={`text-xs font-black uppercase tracking-widest pb-2 border-b-2 transition-all ${adminTab === 'officers' ? 'text-white border-white' : 'text-slate-400 hover:text-white border-transparent'}`}
+            onClick={() => setAdminTab('officers')}
+          >
+            Officers
+          </button>
+        </div>
+      </Card>
+
+      {adminTab === 'officers' ? (
+        <OfficerManager />
+      ) : (
+        <>
+          <div className="bg-slate-950 px-6 py-6 border-b border-slate-800">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest pl-1">Filter Officer</Label>
+                <Select onValueChange={setFilterSO} defaultValue="all">
+                  <SelectTrigger className="bg-slate-900 border-slate-800 h-11 text-xs text-white rounded-xl">
+                    <SelectValue placeholder="All Officers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Officers</SelectItem>
+                    {SALES_OFFICERS.map(so => (
+                      <SelectItem key={so.id} value={so.name}>{so.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest pl-1">Filter Date</Label>
+                <Input 
+                  type="date" 
+                  className="bg-slate-900 border-slate-800 h-11 text-xs text-white rounded-xl"
+                  value={filterDate}
+                  onChange={e => setFilterDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest pl-1">Sort Order</Label>
+                <Select onValueChange={(val: 'asc' | 'desc') => setSortOrder(val)} value={sortOrder}>
+                  <SelectTrigger className="bg-slate-900 border-slate-800 h-11 text-xs text-white rounded-xl">
+                    <SelectValue placeholder="Sort" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="desc">Newest First</SelectItem>
+                    <SelectItem value="asc">Oldest First</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="flex justify-between items-center mt-6">
               <Button 
-                variant="destructive"
-                size="sm"
-                className="h-10 rounded-xl px-3 text-[10px] font-black"
-                onClick={handleClearAllAttendance}
-              >
-                <Trash2 className="w-3 h-3 mr-1" />
-                {filterSO === 'all' ? "RESET ATTENDANCE" : `RESET ${filterSO.toUpperCase()}`}
+                  variant="destructive"
+                  size="sm"
+                  className="rounded-xl px-3 text-[10px] font-black"
+                  onClick={handleClearAllAttendance}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  {filterSO === 'all' ? "RESET ATTENDANCE" : `RESET ${filterSO.toUpperCase()}`}
               </Button>
               <Button 
                 size="sm" 
                 variant="outline" 
-                className="bg-slate-950 border-slate-800 text-white hover:text-sky-400 hover:bg-sky-500/10 hover:border-sky-500/50 h-10 w-10 p-0 font-bold flex items-center justify-center rounded-xl border-2 transition-all active:scale-95 group"
+                className="bg-slate-900 border-slate-800 text-white hover:text-sky-400 hover:bg-sky-500/10 hover:border-sky-500/50 w-auto px-4 font-bold flex items-center justify-center rounded-xl transition-all"
                 onClick={handleExportCSV}
               >
-                <Download className="w-4 h-4 text-primary group-hover:text-sky-400 transition-colors" />
+                <Download className="w-3 h-3 mr-2" /> EXPORT CSV
               </Button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6 pb-10 px-6 pt-0">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest pl-1">Filter Officer</Label>
-              <Select onValueChange={setFilterSO} defaultValue="all">
-                <SelectTrigger className="bg-slate-900 border-slate-800 h-11 text-xs text-white rounded-xl">
-                  <SelectValue placeholder="All Officers" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Officers</SelectItem>
-                  {SALES_OFFICERS.map(so => (
-                    <SelectItem key={so.id} value={so.name}>{so.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest pl-1">Filter Date</Label>
-              <Input 
-                type="date" 
-                className="bg-slate-900 border-slate-800 h-11 text-xs text-white rounded-xl"
-                value={filterDate}
-                onChange={e => setFilterDate(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Monthly Team/Officer Goals Removed from here to Dashboard for Admin */}
-
-      <div className="bg-sky-50/50 border-y border-sky-100 p-8 flex justify-between items-center">
+          <div className="bg-sky-50/50 border-b border-sky-100 p-8 flex justify-between items-center">
         <div>
           <h3 className="text-2xl font-black text-slate-900 tracking-tighter italic">GRAND TOTAL</h3>
           <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5 tracking-widest">Team Performance Sum</p>
@@ -3652,6 +4049,8 @@ const AdminPanel = () => {
           ))}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };
@@ -3835,6 +4234,13 @@ export default function App() {
                           </div>
                         } />
                       )}
+                      {profile.role === 'admin' && (
+                        <Route path="stock" element={
+                          <div className="h-full overflow-y-auto custom-scrollbar">
+                            <StockPanel />
+                          </div>
+                        } />
+                      )}
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </main>
@@ -3861,10 +4267,12 @@ export default function App() {
                         <span className="text-[10px] font-bold uppercase">Admin</span>
                       </Link>
                     )}
-                    <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-slate-400 hover:text-red-500">
-                      <LogOut className="w-5 h-5" />
-                      <span className="text-[10px] font-bold uppercase">Exit</span>
-                    </button>
+                    {profile.role === 'admin' && (
+                      <Link to="/stock" className={`flex flex-col items-center gap-1 transition-colors ${window.location.hash.includes('stock') ? 'text-primary' : 'text-slate-400'}`}>
+                        <Package className="w-5 h-5" />
+                        <span className="text-[10px] font-bold uppercase">Stock</span>
+                      </Link>
+                    )}
                   </div>
                 </div>
               ) : (

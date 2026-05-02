@@ -1,9 +1,34 @@
+export const PRODUCTS = [
+  { name: "BOX", category: "Packaging" },
+  { name: "WALLET", category: "Accessory" },
+  { name: "NAPKIN P", category: "Tissue" },
+  { name: "Nap restaurant", category: "Tissue" },
+  { name: "T-WHAITE", category: "Tissue" },
+  { name: "T-PINK", category: "Tissue" },
+  { name: "T-GOLD", category: "Tissue" },
+  { name: "H/T-150", category: "Dispenser" },
+  { name: "H/T-200", category: "Dispenser" },
+  { name: "H/T-250", category: "Dispenser" },
+  { name: "K/N", category: "Kitchen" },
+  { name: "Total tissue", category: "Tissue" },
+  { name: "EXBOOK", category: "Stationery" },
+  { name: "BALLPEN", category: "Stationery" },
+  { name: "STATIONERY", category: "Stationery" },
+];
+
 export const SALES_OFFICERS = [
   { name: "Sumit Das", id: "136425", photo: "" },
   { name: "Priyas Malakar", id: "111978", photo: "" },
   { name: "Fazlur Rahman", id: "078211", photo: "" },
   { name: "Ridoy Ahmed", id: "169123", photo: "" },
   { name: "Promit Das", id: "175441", photo: "" },
+];
+
+export const DEALERS = [
+  { id: "1013278", name: "Mohona Distribution" },
+  { id: "1031141", name: "D And D Enterprise" },
+  { id: "1031102", name: "Ikbal Ahmed" },
+  { id: "1008143", name: "Islam Brothers Store" },
 ];
 
 export const ADMIN_EMAIL = "miahmdsujon780@gmail.com";

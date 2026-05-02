@@ -39,11 +39,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email in ["miahmdsujon780@gmail.com", "mahbubasujon@gmail.com"] ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-      );
+      return isAuthenticated() && request.auth.token.email == "miahmdsujon780@gmail.com";
     }
 
     function isValidDelivery(data) {
@@ -88,6 +84,13 @@ service cloud.firestore {
              data.timestamp is timestamp;
     }
 
+    function isValidStockItem(data) {
+      return data.keys().hasAll(['name', 'quantity', 'rate']) &&
+             data.name is string &&
+             data.quantity is number &&
+             data.rate is number;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -117,7 +120,14 @@ service cloud.firestore {
     match /product_entries/{entryId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidProductEntry(request.resource.data);
-      allow update, delete: if isAdmin();
+      allow update, delete: if isAuthenticated(); // Allow SOs to edit their own entries
+    }
+
+    match /stock_items/{itemId} {
+      allow get, list: if isAuthenticated();
+      allow create: if isAdmin() && isValidStockItem(request.resource.data);
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
 
     match /officers/{officerId} {
