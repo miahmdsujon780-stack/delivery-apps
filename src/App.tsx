@@ -691,18 +691,16 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
     // Add monthly logic
     const currentMonth = format(getBDDate(), 'yyyy-MM');
     const monthlyProducts = productEntries.filter(e => {
-        const isThisMonth = e.date.startsWith(currentMonth);
         const matchSO = filterMonthlySO === 'all' || 
                        e.soName === filterMonthlySO || 
                        (e.soName && e.soName.trim().toLowerCase() === filterMonthlySO.toLowerCase());
-        return isThisMonth && matchSO;
+        return matchSO;
     });
     const monthlyLegacy = entries.filter(e => {
-        const isThisMonth = e.date.startsWith(currentMonth);
         const matchSO = filterMonthlySO === 'all' || 
                        e.soName === filterMonthlySO || 
                        (e.soName && e.soName.trim().toLowerCase() === filterMonthlySO.toLowerCase());
-        return isThisMonth && matchSO;
+        return matchSO;
     });
     
     // Calculate Aggregate Team Targets based on individual settings
@@ -892,10 +890,10 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-slate-900 leading-none lowercase italic tracking-tighter">
-                      {filterMonthlySO === 'all' ? "Team's" : filterMonthlySO + "'s"} Monthly Goals
+                      {filterMonthlySO === 'all' ? "Team's" : filterMonthlySO + "'s"} All Time Goals
                     </h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5 tracking-wider">
-                      Target Status for {format(getBDDate(), 'MMMM yyyy')}
+                      All Time Target Status
                     </p>
                   </div>
                 </div>
@@ -1493,6 +1491,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [entryDate, setEntryDate] = useState(minDate);
   const [route, setRoute] = useState('');
+  const [memo, setMemo] = useState('');
   
   const isAdmin = userProfile?.role === 'admin';
   const [view, setView] = useState<'catalog' | 'records'>(isAdmin ? 'records' : 'catalog');
@@ -1600,6 +1599,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
         soName: userProfile.name,
         soId: userProfile.uniqueId,
         userId: userProfile.uid,
+        memo: memo || '',
         timestamp: serverTimestamp()
       });
 
@@ -1749,6 +1749,13 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                  onChange={(e) => setRoute(e.target.value)}
                  className="w-48 text-center bg-white border-slate-200 font-bold text-slate-700 shadow-sm rounded-xl focus:ring-primary h-12"
               />
+              <Input 
+                 type="text"
+                 placeholder="Memo"
+                 value={memo}
+                 onChange={(e) => setMemo(e.target.value)}
+                 className="w-48 text-center bg-white border-slate-200 font-bold text-slate-700 shadow-sm rounded-xl focus:ring-primary h-12"
+              />
             </div>
           )}
         </div>
@@ -1787,8 +1794,13 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                      toast.error("রুটের নাম প্রদান করুন");
                      return;
                    }
+                   if (!memo || !memo.trim()) {
+                     toast.error("Memo প্রদান করুন");
+                     return;
+                   }
                    toast.success("প্রোডাক্ট এন্ট্রি সম্পন্ন হয়েছে");
                    setRoute('');
+                   setMemo('');
                 }}
                 className="w-full max-w-sm h-14 bg-primary text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-lg shadow-primary/20 hover:shadow-xl transition-all"
               >
