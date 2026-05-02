@@ -3742,7 +3742,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-primary">
+      <div className="min-h-screen flex items-center justify-center bg-black">
         <motion.div 
           animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
           transition={{ repeat: Infinity, duration: 2 }}
