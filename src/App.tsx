@@ -1479,6 +1479,73 @@ const testConnection = async () => {
 };
 testConnection();
 
+const OfficerStockView = ({ userProfile }: { userProfile: UserProfile | null }) => {
+  const [stock, setStock] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userProfile?.dealerId) {
+      setLoading(false);
+      return;
+    }
+
+    const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
+    if (!assignedDealer) {
+      setLoading(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, "stock_items"),
+      where("dealer", "==", assignedDealer.name)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      setStock(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, [userProfile]);
+
+  if (loading) {
+    return <div className="p-6 text-center text-slate-500 font-bold">Loading Stock...</div>;
+  }
+
+  const assignedDealer = DEALERS.find(d => d.id === userProfile?.dealerId);
+
+  return (
+    <div className="space-y-4 pt-2">
+      <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+        <h3 className="text-sm font-black uppercase text-slate-800 mb-1">Current Stock</h3>
+        <p className="text-xs font-bold text-slate-400 capitalize mb-4">Dealer: {assignedDealer?.name || 'Not Assigned'}</p>
+        
+        {stock.length === 0 ? (
+          <p className="text-center text-sm text-slate-500 py-6">No stock available.</p>
+        ) : (
+          <div className="space-y-3">
+            {stock.map(item => (
+              <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="font-bold text-slate-800 text-sm">{item.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`font-black text-lg ${item.quantity <= 12 ? 'text-red-600' : 'text-primary'}`}>
+                    {item.quantity} <span className={`text-[10px] font-bold ${item.quantity <= 12 ? 'text-red-400' : 'text-slate-400'}`}>PCs</span>
+                  </p>
+                  {item.quantity <= 12 && (
+                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest mt-0.5 animate-pulse">Low Stock</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const bdCurrentDate = getBDDate();
   const maxDate = format(bdCurrentDate, 'yyyy-MM-dd');
@@ -1495,7 +1562,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const [memo, setMemo] = useState('');
   
   const isAdmin = userProfile?.role === 'admin';
-  const [view, setView] = useState<'catalog' | 'records'>(isAdmin ? 'records' : 'catalog');
+  const [view, setView] = useState<'catalog' | 'records' | 'stock'>(isAdmin ? 'records' : 'catalog');
   const [recordViewType, setRecordViewType] = useState<'summary' | 'details' | 'daily'>('summary');
   
   const [records, setRecords] = useState<any[]>([]);
@@ -1838,6 +1905,13 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
             >
                {isAdmin ? 'All Records' : 'My Records'}
             </button>
+            <button
+               onClick={() => setView('stock')}
+               hidden={isAdmin}
+               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${view === 'stock' ? 'bg-white shadow-sm text-primary' : 'text-slate-400'}`}
+            >
+               Stock
+            </button>
           </div>
 
           {!isAdmin && view === 'catalog' && (
@@ -1952,7 +2026,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
               </div>
             </div>
           </div>
-        ) : (
+        ) : view === 'records' ? (
           <div className="space-y-6">
             {/* Filters & Summary */}
             <Card className="border-none shadow-sm bg-slate-900 text-white rounded-2xl overflow-hidden">
@@ -2159,7 +2233,9 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
             </div>
           )}
         </div>
-      )}
+      ) : view === 'stock' ? (
+        <OfficerStockView userProfile={userProfile} />
+      ) : null}
     </div>
     <AnimatePresence mode="wait">
         {selectedProduct && (
