@@ -30,7 +30,7 @@ import {
 } from './firebase';
 import { getDocFromServer } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { DEALERS, SALES_OFFICERS, ADMIN_EMAIL, MONTHLY_TARGETS, GLOBAL_TARGETS } from './constants';
+import { DEALERS, SALES_OFFICERS, ADMIN_EMAIL, MONTHLY_TARGETS, GLOBAL_TARGETS, PRODUCTS } from './constants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -1514,31 +1514,116 @@ const OfficerStockView = ({ userProfile }: { userProfile: UserProfile | null }) 
 
   const assignedDealer = DEALERS.find(d => d.id === userProfile?.dealerId);
 
+  const getCategoryValue = (category: string) => {
+    return stock
+      .filter((item) => {
+        const product = PRODUCTS.find((p) => p.name === item.name);
+        return product?.category === category;
+      })
+      .reduce((acc, curr) => acc + ((curr.quantity || 0) * (curr.rate || 0)), 0);
+  };
+
+  const getProductValue = (productName: string) => {
+    return stock
+      .filter((item) => item.name === productName)
+      .reduce((acc, curr) => acc + ((curr.quantity || 0) * (curr.rate || 0)), 0);
+  };
+
+  const totalTissueValue = getCategoryValue('Tissue');
+  const exbookValue = getProductValue('EXBOOK');
+  const ballpenValue = getProductValue('BALLPEN');
+  const stationeryValue = getProductValue('STATIONERY');
+
+  const grandTotal = totalTissueValue + exbookValue + ballpenValue + stationeryValue;
+
   return (
     <div className="space-y-4 pt-2">
       <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-        <h3 className="text-sm font-black uppercase text-slate-800 mb-1">Current Stock</h3>
+        <h3 className="text-sm font-black uppercase text-slate-800 mb-1">Current Stock Values</h3>
         <p className="text-xs font-bold text-slate-400 capitalize mb-4">Dealer: {assignedDealer?.name || 'Not Assigned'}</p>
         
         {stock.length === 0 ? (
           <p className="text-center text-sm text-slate-500 py-6">No stock available.</p>
         ) : (
-          <div className="space-y-3">
-            {stock.map(item => (
-              <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="space-y-6">
+            <div className="space-y-3">
+              {[...stock].sort((a, b) => {
+                const catA = PRODUCTS.find(p => p.name === a.name)?.category;
+                const catB = PRODUCTS.find(p => p.name === b.name)?.category;
+                if (catA === 'Tissue' && catB !== 'Tissue') return -1;
+                if (catA !== 'Tissue' && catB === 'Tissue') return 1;
+                
+                const indexA = PRODUCTS.findIndex(p => p.name === a.name);
+                const indexB = PRODUCTS.findIndex(p => p.name === b.name);
+                return (indexA > -1 ? indexA : 999) - (indexB > -1 ? indexB : 999);
+              }).map(item => (
+                <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">{item.name}</p>
+                  </div>
+                  <div className="text-right">
+                    {item.name === 'EXBOOK' ? (
+                      <p className="font-black text-lg text-primary">
+                        <span className="text-[10px] font-bold text-slate-400 mr-1">৳</span>{item.quantity.toLocaleString()}
+                      </p>
+                    ) : (
+                      <>
+                        <p className={`font-black text-lg ${item.quantity <= 12 ? 'text-red-600' : 'text-primary'}`}>
+                          {item.quantity} <span className={`text-[10px] font-bold ${item.quantity <= 12 ? 'text-red-400' : 'text-slate-400'}`}>PCs</span>
+                        </p>
+                        {item.quantity <= 12 && (
+                          <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest mt-0.5 animate-pulse">Low Stock</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="space-y-3 pt-6 border-t border-slate-100">
+              <h4 className="text-xs font-black uppercase text-slate-500 mb-3 tracking-widest">Stock Value Summary</h4>
+              <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
-                  <p className="font-bold text-slate-800 text-sm">{item.name}</p>
+                  <p className="font-bold text-slate-800 text-sm uppercase">Total Tissue Value</p>
                 </div>
                 <div className="text-right">
-                  <p className={`font-black text-lg ${item.quantity <= 12 ? 'text-red-600' : 'text-primary'}`}>
-                    {item.quantity} <span className={`text-[10px] font-bold ${item.quantity <= 12 ? 'text-red-400' : 'text-slate-400'}`}>PCs</span>
-                  </p>
-                  {item.quantity <= 12 && (
-                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest mt-0.5 animate-pulse">Low Stock</p>
-                  )}
+                  <p className="font-black text-lg text-primary">৳ {totalTissueValue.toLocaleString()}</p>
                 </div>
               </div>
-            ))}
+              <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="font-bold text-slate-800 text-sm uppercase">EXBOOK Value</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-lg text-primary">৳ {exbookValue.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="font-bold text-slate-800 text-sm uppercase">BALLPEN Value</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-lg text-primary">৳ {ballpenValue.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="font-bold text-slate-800 text-sm uppercase">STATIONERY Value</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-lg text-primary">৳ {stationeryValue.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-4 bg-slate-100 rounded-xl border border-slate-200 mt-2">
+                <div>
+                  <p className="font-black text-slate-900 text-sm uppercase tracking-widest">Grand Total Value</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-xl text-emerald-600">৳ {grandTotal.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1577,17 +1662,17 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   }, [userProfile, filterSO]);
 
   const products = [
-    { name: "BOX", category: "Packaging" },
-    { name: "WALLET", category: "Accessory" },
+    { name: "BOX", category: "Tissue" },
+    { name: "WALLET", category: "Tissue" },
     { name: "NAPKIN P", category: "Tissue" },
     { name: "Nap restaurant", category: "Tissue" },
     { name: "T-WHAITE", category: "Tissue" },
     { name: "T-PINK", category: "Tissue" },
     { name: "T-GOLD", category: "Tissue" },
-    { name: "H/T-150", category: "Dispenser" },
-    { name: "H/T-200", category: "Dispenser" },
-    { name: "H/T-250", category: "Dispenser" },
-    { name: "K/N", category: "Kitchen" },
+    { name: "H/T-150", category: "Tissue" },
+    { name: "H/T-200", category: "Tissue" },
+    { name: "H/T-250", category: "Tissue" },
+    { name: "K/N", category: "Tissue" },
     { name: "Total tissue", category: "Tissue" },
     { name: "EXBOOK", category: "Stationery" },
     { name: "BALLPEN", category: "Stationery" },
@@ -1658,7 +1743,9 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
 
     setIsSubmitting(true);
     try {
-      if (pieces && Number(pieces) > 0) {
+      const amountToDeduct = requiresValueOnly ? Number(value) : Number(pieces);
+      
+      if (amountToDeduct && amountToDeduct > 0) {
         const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
         if (assignedDealer) {
           const stockQuery = query(
@@ -1672,7 +1759,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
             const stockDoc = stockSnap.docs[0];
             const currentQuantity = Number(stockDoc.data().quantity || 0);
             await updateDoc(doc(db, "stock_items", stockDoc.id), {
-              quantity: currentQuantity - Number(pieces),
+              quantity: currentQuantity - amountToDeduct,
               updatedAt: serverTimestamp()
             });
           } else {
@@ -1720,22 +1807,27 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     if (!window.confirm("আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?")) return;
     try {
       const record = records.find(r => r.id === id);
-      if (record && record.pieces && !id.includes('_')) {
-        const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
-        if (assignedDealer) {
-          const stockQuery = query(
-            collection(db, "stock_items"), 
-            where("name", "==", record.productName?.trim() || ""), 
-            where("dealer", "==", assignedDealer.name)
-          );
-          const stockSnap = await getDocs(stockQuery);
-          if (!stockSnap.empty) {
-            const stockDoc = stockSnap.docs[0];
-            const currentQuantity = Number(stockDoc.data().quantity || 0);
-            await updateDoc(doc(db, "stock_items", stockDoc.id), {
-              quantity: currentQuantity + Number(record.pieces),
-              updatedAt: serverTimestamp()
-            });
+      if (record && !id.includes('_')) {
+        const requiresValueOnly = record.productName === 'EXBOOK' || record.productName === 'Total tissue';
+        const amountToRestore = requiresValueOnly ? Number(record.value) : Number(record.pieces);
+        
+        if (amountToRestore && amountToRestore > 0) {
+          const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
+          if (assignedDealer) {
+            const stockQuery = query(
+              collection(db, "stock_items"), 
+              where("name", "==", record.productName?.trim() || ""), 
+              where("dealer", "==", assignedDealer.name)
+            );
+            const stockSnap = await getDocs(stockQuery);
+            if (!stockSnap.empty) {
+              const stockDoc = stockSnap.docs[0];
+              const currentQuantity = Number(stockDoc.data().quantity || 0);
+              await updateDoc(doc(db, "stock_items", stockDoc.id), {
+                quantity: currentQuantity + amountToRestore,
+                updatedAt: serverTimestamp()
+              });
+            }
           }
         }
       }
@@ -1770,8 +1862,12 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
         }
       } else {
         const record = records.find(r => r.id === id);
-        if (record && record.pieces) {
-          const difference = Number(editPieces) - Number(record.pieces);
+        if (record) {
+          const requiresValueOnly = record.productName === 'EXBOOK' || record.productName === 'Total tissue';
+          const originalAmount = requiresValueOnly ? Number(record.value) : Number(record.pieces);
+          const newAmount = requiresValueOnly ? Number(editValue) : Number(editPieces);
+          const difference = newAmount - originalAmount;
+
           if (difference !== 0) {
             const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
             if (assignedDealer) {
@@ -3324,10 +3420,6 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
   );
 };
 
-import { PRODUCTS, DEALERS } from './constants';
-// ... rest of the imports that might be needed, assuming they're already there.
-// Since I cannot view all imports easily I will just use PRODUCTS directly as it's a named import added.
-
 const StockPanel = () => {
   const [stock, setStock] = useState<any[]>([]);
   const [name, setName] = useState('');
@@ -3345,28 +3437,33 @@ const StockPanel = () => {
     return () => unsub();
   }, []);
 
+  const isValueOnly = name === 'EXBOOK';
+
   const saveItem = async () => {
-    if (!name || (!quantity && quantity !== '0') || (!rate && rate !== '0')) return;
+    if (!name || (!quantity && quantity !== '0')) return;
+    if (!isValueOnly && !rate && rate !== '0') return;
     
     const existingItem = stock.find(
       s => s.name.trim().toLowerCase() === name.trim().toLowerCase() && s.dealer === dealer
     );
+
+    const finalRate = isValueOnly ? 1 : Number(rate);
 
     try {
       if (existingItem) {
         const newQuantity = (Number(existingItem.quantity) || 0) + Number(quantity);
         await updateDoc(doc(db, "stock_items", existingItem.id), {
           quantity: newQuantity,
-          rate: Number(rate),
+          rate: finalRate,
           updatedAt: serverTimestamp()
         });
-        toast.success("Existing product updated (+ Quantity)");
+        toast.success("Existing product updated (+ Quantity/Value)");
       } else {
         await addDoc(collection(db, "stock_items"), {
           name: name.trim(),
           dealer,
           quantity: Number(quantity),
-          rate: Number(rate),
+          rate: finalRate,
           createdAt: serverTimestamp()
         });
         toast.success("New product added");
@@ -3389,9 +3486,10 @@ const StockPanel = () => {
 
   const saveInlineEdit = async (item: any) => {
     try {
+      const isItemValueOnly = item.name === 'EXBOOK';
       await updateDoc(doc(db, "stock_items", item.id), {
         quantity: Number(inlineQuantity),
-        rate: Number(inlineRate),
+        rate: isItemValueOnly ? 1 : Number(inlineRate),
         updatedAt: serverTimestamp()
       });
       setInlineEditId(null);
@@ -3434,8 +3532,16 @@ const StockPanel = () => {
           <select value={dealer} onChange={(e) => setDealer(e.target.value)} className="p-2 border rounded-xl bg-white">
              {DEALERS.map(d => <option key={d.name} value={d.name}>{d.name} ({d.id})</option>)}
           </select>
-          <Input type="number" placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-          <Input type="number" placeholder="Rate (৳)" value={rate} onChange={(e) => setRate(e.target.value)} />
+          {isValueOnly ? (
+            <div className="col-span-1 md:col-span-2">
+              <Input type="number" placeholder="Value (৳)" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            </div>
+          ) : (
+            <>
+              <Input type="number" placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+              <Input type="number" placeholder="Rate (৳)" value={rate} onChange={(e) => setRate(e.target.value)} />
+            </>
+          )}
           <div className="flex gap-2">
             <Button onClick={saveItem} className="bg-slate-900 text-white rounded-xl flex-grow">Add</Button>
           </div>
@@ -3451,15 +3557,15 @@ const StockPanel = () => {
                 <thead className="text-xs text-slate-700 uppercase bg-slate-50">
                   <tr>
                     <th className="px-4 py-3">Item</th>
-                    <th className="px-4 py-3">Quantity</th>
-                    <th className="px-4 py-3">Rate</th>
+                    <th className="px-4 py-3 text-center">Quantity</th>
+                    <th className="px-4 py-3 text-center">Rate</th>
                     <th className="px-4 py-3">Value</th>
                     <th className="px-4 py-3">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stock
-                    .filter(item => item.dealer === d.name)
+                    .filter(item => item.dealer === d.name && PRODUCTS.find(p => p.name === item.name)?.category === 'Tissue')
                     .sort((a, b) => {
                        const indexA = PRODUCTS.findIndex(p => p.name === a.name);
                        const indexB = PRODUCTS.findIndex(p => p.name === b.name);
@@ -3468,17 +3574,17 @@ const StockPanel = () => {
                     .map(item => (
                     <tr key={item.id} className="bg-white border-b border-slate-100">
                       <td className="px-4 py-4 font-bold">{item.name}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-center">
                         {inlineEditId === item.id ? (
                           <input type="number" 
                                  value={inlineQuantity} 
                                  onChange={e => setInlineQuantity(e.target.value)} 
-                                 className="w-20 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10" />
+                                 className="w-20 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10 mx-auto" />
                         ) : item.quantity}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-center">
                         {inlineEditId === item.id ? (
-                          <div className="flex items-center">
+                          <div className="flex items-center justify-center">
                             <span className="mr-1">৳</span>
                             <input type="number" 
                                    value={inlineRate} 
@@ -3505,6 +3611,93 @@ const StockPanel = () => {
                       </td>
                     </tr>
                   ))}
+                  {/* Total Tissue row */}
+                  <tr className="bg-slate-50 border-t-2 border-slate-200">
+                    <td colSpan={3} className="px-4 py-4 font-black uppercase text-right text-slate-600 tracking-widest text-xs">Total Tissue Value</td>
+                    <td className="px-4 py-4 font-black text-primary">
+                      ৳{stock
+                        .filter(item => item.dealer === d.name && PRODUCTS.find(p => p.name === item.name)?.category === 'Tissue')
+                        .reduce((acc, curr) => acc + ((curr.quantity || 0) * (curr.rate || 0)), 0)
+                        .toLocaleString()
+                      }
+                    </td>
+                    <td></td>
+                  </tr>
+
+                  {/* Non-Tissue Items */}
+                  {stock
+                    .filter(item => item.dealer === d.name && PRODUCTS.find(p => p.name === item.name)?.category !== 'Tissue')
+                    .sort((a, b) => {
+                       const indexA = PRODUCTS.findIndex(p => p.name === a.name);
+                       const indexB = PRODUCTS.findIndex(p => p.name === b.name);
+                       return (indexA > -1 ? indexA : 999) - (indexB > -1 ? indexB : 999);
+                    })
+                    .map(item => (
+                    <tr key={item.id} className="bg-white border-b border-slate-100">
+                      <td className="px-4 py-4 font-bold">{item.name}</td>
+                      <td className="px-4 py-4 text-center">
+                        {item.name === 'EXBOOK' ? (
+                          <span className="text-slate-300 font-bold">-</span>
+                        ) : inlineEditId === item.id ? (
+                          <input type="number" 
+                                 value={inlineQuantity} 
+                                 onChange={e => setInlineQuantity(e.target.value)} 
+                                 className="w-20 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10" />
+                        ) : item.quantity}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        {item.name === 'EXBOOK' ? (
+                          <span className="text-slate-300 font-bold">-</span>
+                        ) : inlineEditId === item.id ? (
+                          <div className="flex items-center justify-center">
+                            <span className="mr-1">৳</span>
+                            <input type="number" 
+                                   value={inlineRate} 
+                                   onChange={e => setInlineRate(e.target.value)} 
+                                   className="w-20 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10" />
+                          </div>
+                        ) : `৳${item.rate}`}
+                      </td>
+                      <td className="px-4 py-4 font-black text-primary">
+                        {inlineEditId === item.id && item.name === 'EXBOOK' ? (
+                           <div className="flex items-center">
+                            <span className="mr-1">৳</span>
+                            <input type="number" 
+                                   value={inlineQuantity} 
+                                   onChange={e => setInlineQuantity(e.target.value)} 
+                                   className="w-24 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10" />
+                          </div>
+                        ) : `৳${((item.quantity || 0) * (item.rate || 0)).toLocaleString()}`}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex gap-2">
+                          {inlineEditId === item.id ? (
+                            <>
+                              <Button onClick={() => saveInlineEdit(item)} className="text-xs h-8 bg-primary text-white rounded-lg">Save</Button>
+                              <Button onClick={() => setInlineEditId(null)} className="text-xs h-8 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg">Cancel</Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button onClick={() => startInlineEdit(item)} className="text-xs h-8 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg">Edit</Button>
+                              <Button onClick={() => deleteItem(item.id)} className="text-xs h-8 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg">Delete</Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Grand Total row */}
+                  <tr className="bg-slate-100 border-t-4 border-slate-300">
+                    <td colSpan={3} className="px-4 py-4 font-black uppercase text-right text-slate-800 tracking-widest text-sm">Grand Total Value</td>
+                    <td className="px-4 py-4 font-black text-emerald-600 text-lg">
+                      ৳{stock
+                        .filter(item => item.dealer === d.name)
+                        .reduce((acc, curr) => acc + ((curr.quantity || 0) * (curr.rate || 0)), 0)
+                        .toLocaleString()
+                      }
+                    </td>
+                    <td></td>
+                  </tr>
                 </tbody>
               </table>
             </div>
