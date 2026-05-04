@@ -2189,7 +2189,6 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     <div className="p-4 md:p-6 pb-24 md:pb-6 relative flex flex-col h-full overflow-hidden">
       <div className="mb-6 text-center space-y-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Our Products</h2>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 mb-4">
             {isAdmin ? 'Product Records • প্রোডাক্ট তথ্য' : 'Delivery summary • ডেলিভারি সামারি'}
           </p>
