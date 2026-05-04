@@ -2186,7 +2186,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   };
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 relative flex flex-col h-full overflow-hidden">
+    <div className="p-4 md:p-6 pb-16 md:pb-6 relative flex flex-col h-full overflow-hidden">
       <div className="mb-6 text-center space-y-4">
         <div>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 mb-4">
@@ -2451,7 +2451,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                 </table>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 h-fit">
                 {filteredRecords.length === 0 ? (
                   <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
                     <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">No entries found</p>
@@ -2528,6 +2528,12 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                           <p className="text-sm font-black text-primary">৳ {record.value}</p>
                         )}
                       </div>
+                      {record.memo && (
+                        <div className="pt-2 border-t border-slate-50">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Memo</p>
+                          <p className="text-[10px] text-red-500 font-bold uppercase tracking-tighter bg-red-50 px-2 py-1 rounded-md inline-block">Memo : {record.memo}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
