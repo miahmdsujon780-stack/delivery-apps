@@ -1745,7 +1745,8 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     try {
       const amountToDeduct = requiresValueOnly ? Number(value) : Number(pieces);
       
-      if (amountToDeduct && amountToDeduct > 0) {
+      // Do not deduct stock for Total tissue as it doesn't exist in stock
+      if (amountToDeduct && amountToDeduct > 0 && selectedProduct !== 'Total tissue') {
         const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
         if (assignedDealer) {
           const stockQuery = query(
@@ -1811,7 +1812,8 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
         const requiresValueOnly = record.productName === 'EXBOOK' || record.productName === 'Total tissue';
         const amountToRestore = requiresValueOnly ? Number(record.value) : Number(record.pieces);
         
-        if (amountToRestore && amountToRestore > 0) {
+        // Do not update stock for Total tissue
+        if (amountToRestore && amountToRestore > 0 && record.productName !== 'Total tissue') {
           const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
           if (assignedDealer) {
             const stockQuery = query(
@@ -1868,7 +1870,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
           const newAmount = requiresValueOnly ? Number(editValue) : Number(editPieces);
           const difference = newAmount - originalAmount;
 
-          if (difference !== 0) {
+          if (difference !== 0 && record.productName !== 'Total tissue') {
             const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
             if (assignedDealer) {
               const stockQuery = query(
