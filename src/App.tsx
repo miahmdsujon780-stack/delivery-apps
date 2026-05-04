@@ -2395,7 +2395,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
             </div>
 
             {recordViewType === 'daily' ? (
-              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm h-fit">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 border-b border-slate-100 uppercase tracking-widest text-[9px] text-slate-500 font-bold">
                     <tr>
@@ -2424,7 +2424,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                 </table>
               </div>
             ) : recordViewType === 'summary' ? (
-              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm h-fit">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 border-b border-slate-100 uppercase tracking-widest text-[9px] text-slate-500 font-bold">
                     <tr>
