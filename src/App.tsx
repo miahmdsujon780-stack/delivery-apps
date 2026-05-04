@@ -861,7 +861,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
     if (roundedCurrent < expectedValue && expectedValue > 0) {
       setWarningMessage({
         title: "টিস্যু লক্ষ্যমাত্রার চেয়ে পিছিয়ে আছেন!",
-        body: `বর্তমান অর্জন: ৳${roundedCurrent.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nআজকের টার্গেট: ৳${expectedValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nশর্টফল (Shortfall): ৳${shortfall.toLocaleString('en-IN', {maximumFractionDigits: 0})}\n\nদয়া করে লক্ষ্যমাত্রা পূরণে আরও নজর দিন।`
+        body: `বর্তমান অর্জন: ৳${roundedCurrent.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nআজকে পর্যন্ত হওয়ার কথা ছিল : ৳${expectedValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nশর্টফল (Shortfall): ৳${shortfall.toLocaleString('en-IN', {maximumFractionDigits: 0})}\n\nদয়া করে লক্ষ্যমাত্রা পূরণে আরও নজর দিন।`
       });
       setShowWarningModal(true);
     } else {
@@ -891,7 +891,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                   <AlertCircle className="w-8 h-8" />
                 </div>
                 <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">{warningMessage.title}</h2>
-                <p className="text-sm font-bold text-slate-500 mb-8 leading-relaxed whitespace-pre-line">
+                <p className="text-xs font-bold text-slate-500 mb-8 leading-relaxed whitespace-pre-line">
                   {warningMessage.body}
                 </p>
                 <button 
