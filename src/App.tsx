@@ -1922,7 +1922,26 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
       if (r.stationery > 0) mappedLegacy.push({ ...r, id: `${r.id}_stationery`, productName: 'STATIONERY', pieces: 0, value: r.stationery, isLegacy: true });
     });
 
-    return [...mainRecords, ...mappedLegacy];
+    const combined = [...mainRecords, ...mappedLegacy];
+    
+    return combined.sort((a, b) => {
+      const catA = PRODUCTS.find(p => p.name === a.productName)?.category;
+      const catB = PRODUCTS.find(p => p.name === b.productName)?.category;
+      if (catA === 'Tissue' && catB !== 'Tissue') return -1;
+      if (catA !== 'Tissue' && catB === 'Tissue') return 1;
+      
+      const indexA = PRODUCTS.findIndex(p => p.name === a.productName);
+      const indexB = PRODUCTS.findIndex(p => p.name === b.productName);
+      
+      if (indexA !== indexB) {
+        return (indexA > -1 ? indexA : 999) - (indexB > -1 ? indexB : 999);
+      }
+      
+      // If same product, sort by timestamp descending
+      const tA = a.timestamp?.toMillis?.() || 0;
+      const tB = b.timestamp?.toMillis?.() || 0;
+      return tB - tA;
+    });
   }, [records, legacyRecords, filterSO, filterDate]);
 
   const summary = useMemo(() => {
@@ -3853,9 +3872,46 @@ const AdminPanel = () => {
         await deleteDoc(doc(db, 'deliveries', entry.id));
       } else {
         const batch = writeBatch(db);
-        entry.originalIds.forEach((id: string) => {
-          batch.delete(doc(db, 'product_entries', id));
-        });
+        
+        for (const id of entry.originalIds) {
+          const docRef = doc(db, 'product_entries', id);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const requiresValueOnly = data.productName === 'EXBOOK' || data.productName === 'Total tissue';
+            const amountToRestore = requiresValueOnly ? Number(data.value) : Number(data.pieces);
+            
+            if (amountToRestore && amountToRestore > 0 && data.productName !== 'Total tissue') {
+              if (data.userId) {
+                const userDocSnap = await getDoc(doc(db, 'users', data.userId));
+                if (userDocSnap.exists()) {
+                  const userData = userDocSnap.data();
+                  const assignedDealer = DEALERS.find(d => d.id === userData.dealerId);
+                  
+                  if (assignedDealer) {
+                    const stockQuery = query(
+                      collection(db, "stock_items"), 
+                      where("name", "==", data.productName?.trim() || ""), 
+                      where("dealer", "==", assignedDealer.name)
+                    );
+                    const stockSnap = await getDocs(stockQuery);
+                    if (!stockSnap.empty) {
+                      const stockDoc = stockSnap.docs[0];
+                      const currentQuantity = Number(stockDoc.data().quantity || 0);
+                      batch.update(doc(db, "stock_items", stockDoc.id), {
+                        quantity: currentQuantity + amountToRestore,
+                        updatedAt: serverTimestamp()
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+          batch.delete(docRef);
+        }
+        
         await batch.commit();
       }
       toast.success("Entry deleted successfully");
