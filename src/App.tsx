@@ -147,6 +147,7 @@ interface DeliveryEntry {
   exbook: number;
   stationery: number;
   timestamp: any;
+  memo?: string;
 }
 
 interface AttendanceEntry {
@@ -680,6 +681,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
           ballpenP: 0, ballpenV: 0,
           exbookP: 0, exbookV: 0,
           stationeryP: 0, stationeryV: 0,
+          memo: entry.memo,
           originalIds: []
         });
       }
@@ -1266,6 +1268,9 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
                         {group.route} • {group.date} • ID: {group.soId}
                       </p>
+                      {group.memo && (
+                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-tighter mt-1 bg-red-50 px-2 py-0.5 rounded-md inline-block">Memo : {group.memo}</p>
+                      )}
                     </div>
                   </div>
                   
@@ -1948,6 +1953,12 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
           setIsSubmitting(false);
           return;
         }
+      }
+
+      if (!memo || !memo.trim()) {
+        toast.error("Memo প্রদান করুন। এটি বাধ্যতামূলক।");
+        setIsSubmitting(false);
+        return;
       }
 
       await addDoc(collection(db, 'product_entries'), {
@@ -4009,6 +4020,7 @@ const AdminPanel = () => {
             userId: entry.userId,
             date: entry.date,
             route: entry.route || 'No Route',
+            memo: entry.memo,
             tissue: 0,
             ballpen: 0,
             exbook: 0,
@@ -4462,6 +4474,9 @@ const AdminPanel = () => {
                         )}
                       </h4>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{entry.route} • {entry.date}</p>
+                      {entry.memo && (
+                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-tighter mt-1 bg-red-50 px-2 py-0.5 rounded-md inline-block">Memo : {entry.memo}</p>
+                      )}
                     </>
                   )}
                 </div>
