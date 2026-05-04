@@ -298,21 +298,31 @@ const TargetProgress = ({
   label, 
   current, 
   target, 
-  colorClass = "bg-primary" 
+  colorClass = "bg-primary",
+  workingDays
 }: { 
   label: string; 
   current: number; 
   target: number; 
   colorClass?: string;
+  workingDays?: number;
 }) => {
   const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
   const isCompleted = current >= target;
+  const dailyRequired = workingDays && workingDays > 0 ? Math.round(target / workingDays) : 0;
 
   return (
     <div className="space-y-1.5 w-full">
       <div className="flex justify-between items-end">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{label}</span>
+        <div className="flex flex-col mb-1 block">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{label}</span>
+            {dailyRequired > 0 && (
+              <span className="text-[8px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded tracking-widest border border-amber-200">
+                ৳{dailyRequired.toLocaleString()} / DAY
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-black text-slate-900">৳{(current ?? 0).toLocaleString()}</span>
             <span className="text-[9px] font-bold text-slate-300 uppercase">/ ৳{(target ?? 0).toLocaleString()}</span>
@@ -346,11 +356,32 @@ interface AssignedLocation {
   radius: number;
 }
 
+const getWorkingDaysExcludeFridays = (startDateStr: string, endDateStr: string) => {
+  if (!startDateStr || !endDateStr) return 0;
+  let count = 0;
+  let curDate = new Date(startDateStr);
+  curDate.setHours(0, 0, 0, 0);
+  const end = new Date(endDateStr);
+  end.setHours(0, 0, 0, 0);
+  
+  if (curDate > end) return 0;
+
+  while (curDate <= end) {
+    if (curDate.getDay() !== 5) { // 5 is Friday
+      count++;
+    }
+    curDate.setDate(curDate.getDate() + 1);
+  }
+  return count;
+};
+
 const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, systemConfig: SystemConfig }) => {
   const isAdmin = userProfile.role === 'admin';
   const MapMarker = Marker as any;
   const [entries, setEntries] = useState<DeliveryEntry[]>([]);
   const [productEntries, setProductEntries] = useState<any[]>([]);
+  const [loadingDeliveries, setLoadingDeliveries] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [targets, setTargets] = useState(MONTHLY_TARGETS); // Global/Team Targets
   const [allOfficerTargets, setAllOfficerTargets] = useState<Record<string, typeof MONTHLY_TARGETS>>({});
   const [isEditingTargets, setIsEditingTargets] = useState(false);
@@ -442,6 +473,38 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
   };
 
   const [filterMonthlySO, setFilterMonthlySO] = useState('all');
+  
+  const [cycleStartDate, setCycleStartDate] = useState(() => {
+    const today = new Date();
+    let month = today.getMonth();
+    let year = today.getFullYear();
+    if (today.getDate() <= 25) {
+      if (month === 0) {
+        month = 11;
+        year--;
+      } else {
+        month--;
+      }
+    }
+    return format(new Date(year, month, 26), 'yyyy-MM-dd');
+  });
+
+  const [cycleEndDate, setCycleEndDate] = useState(() => {
+    const today = new Date();
+    let month = today.getMonth();
+    let year = today.getFullYear();
+    if (today.getDate() > 25) {
+      if (month === 11) {
+        month = 0;
+        year++;
+      } else {
+        month++;
+      }
+    }
+    return format(new Date(year, month, 25), 'yyyy-MM-dd');
+  });
+
+  const workingDays = useMemo(() => getWorkingDaysExcludeFridays(cycleStartDate, cycleEndDate), [cycleStartDate, cycleEndDate]);
 
   useEffect(() => {
     if (userProfile.role !== 'admin' && filterMonthlySO === 'all') {
@@ -508,6 +571,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
         return timeB - timeA;
       });
       setEntries(data);
+      setLoadingDeliveries(false);
     }, (error) => {
       console.error("Deliveries sync error:", error);
       handleFirestoreError(error, OperationType.LIST, 'deliveries');
@@ -529,6 +593,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
         return timeB - timeA;
       });
       setProductEntries(data);
+      setLoadingProducts(false);
     }, (error) => {
       console.error("Products sync error:", error);
     });
@@ -756,12 +821,91 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
       monthlyStationeryV: monthlyLegacy.reduce((acc, curr) => acc + (curr.stationery || 0), 0) +
                           monthlyProducts.filter(e => e.productName === 'STATIONERY').reduce((acc, curr) => acc + (Number(curr.value) || 0), 0),
     };
-
   }, [entries, productEntries, filterMonthlySO]);
 
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warningMessage, setWarningMessage] = useState({ title: '', body: '' });
+
+  useEffect(() => {
+    if (!userProfile || !stats || loadingDeliveries || loadingProducts) return;
+    if (userProfile.role !== 'admin' && filterMonthlySO === 'all') return;
+
+    const tissueTarget = filterMonthlySO === 'all' 
+      ? stats.teamTargets.tissue 
+      : (allOfficerTargets[filterMonthlySO]?.tissue || targets.tissue);
+    
+    const tissueCurrent = stats.monthlyTissueV || 0;
+
+    let elapsedWorkingDays = 0;
+    const todayDate = new Date();
+    todayDate.setHours(0,0,0,0);
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+    const startDateDate = new Date(cycleStartDate);
+    startDateDate.setHours(0,0,0,0);
+    const endDateDate = new Date(cycleEndDate);
+    endDateDate.setHours(0,0,0,0);
+
+    if (yesterdayDate >= startDateDate && yesterdayDate <= endDateDate) {
+      elapsedWorkingDays = getWorkingDaysExcludeFridays(format(startDateDate, 'yyyy-MM-dd'), format(yesterdayDate, 'yyyy-MM-dd'));
+    } else if (yesterdayDate > endDateDate) {
+      elapsedWorkingDays = workingDays;
+    }
+    
+    const dailyRequired = workingDays > 0 ? tissueTarget / workingDays : 0;
+    const expectedValue = Math.round(elapsedWorkingDays * dailyRequired);
+    const roundedCurrent = Math.round(tissueCurrent);
+    const shortfall = expectedValue - roundedCurrent;
+    
+    if (roundedCurrent < expectedValue && expectedValue > 0) {
+      setWarningMessage({
+        title: "টিস্যু লক্ষ্যমাত্রার চেয়ে পিছিয়ে আছেন!",
+        body: `বর্তমান অর্জন: ৳${roundedCurrent.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nআজকের টার্গেট: ৳${expectedValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nশর্টফল (Shortfall): ৳${shortfall.toLocaleString('en-IN', {maximumFractionDigits: 0})}\n\nদয়া করে লক্ষ্যমাত্রা পূরণে আরও নজর দিন।`
+      });
+      setShowWarningModal(true);
+    } else {
+      setShowWarningModal(false);
+    }
+  }, [userProfile, stats, allOfficerTargets, targets, workingDays, loadingDeliveries, loadingProducts, filterMonthlySO]);
 
   return (
     <div className="space-y-6">
+      <AnimatePresence>
+        {showWarningModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-amber-500 rounded-t-3xl"></div>
+              <div className="flex flex-col items-center text-center mt-2">
+                <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-6">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">{warningMessage.title}</h2>
+                <p className="text-sm font-bold text-slate-500 mb-8 leading-relaxed whitespace-pre-line">
+                  {warningMessage.body}
+                </p>
+                <button 
+                  onClick={() => setShowWarningModal(false)}
+                  className="w-full bg-slate-900 text-white font-black uppercase tracking-widest text-xs py-4 rounded-2xl hover:bg-slate-800 transition-colors"
+                >
+                  আমি বুঝতে পেরেছি
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Grand Total Card - MOVED TO TOP */}
       <Card className="bg-primary border-none shadow-lg p-5 rounded-2xl overflow-hidden relative group">
         <div className="absolute inset-0 flex items-center justify-center opacity-10 transition-transform group-hover:scale-110">
@@ -900,18 +1044,45 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                 </div>
 
                 {isAdmin && (
-                  <div className="w-full sm:w-48">
-                    <Select onValueChange={setFilterMonthlySO} defaultValue="all">
-                      <SelectTrigger className="h-9 text-xs font-bold rounded-xl border-slate-100 bg-slate-50">
-                        <SelectValue placeholder="Select Officer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Team (All Officers)</SelectItem>
-                        {SALES_OFFICERS.map(so => (
-                          <SelectItem key={so.id} value={so.name}>{so.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex flex-col sm:flex-row items-end gap-2 w-full sm:w-auto mt-4 sm:mt-0">
+                    <div className="flex items-center space-x-1.5 p-1 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="flex flex-col">
+                        <Label className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-2 mb-0.5">Cycle Start</Label>
+                        <Input 
+                          type="date"
+                          value={cycleStartDate}
+                          onChange={e => setCycleStartDate(e.target.value)}
+                          className="h-8 text-xs w-[120px] border-none bg-white font-bold rounded-lg"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <Label className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-2 mb-0.5">Cycle End</Label>
+                        <Input 
+                          type="date"
+                          value={cycleEndDate}
+                          onChange={e => setCycleEndDate(e.target.value)}
+                          className="h-8 text-xs w-[120px] border-none bg-white font-bold rounded-lg"
+                        />
+                      </div>
+                      <div className="px-3 flex flex-col justify-center items-center h-full">
+                        <span className="text-sm font-black text-slate-700 leading-none">{workingDays}</span>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Days</span>
+                      </div>
+                    </div>
+                    
+                    <div className="w-full sm:w-48">
+                      <Select onValueChange={setFilterMonthlySO} defaultValue="all">
+                        <SelectTrigger className="h-12 text-xs font-bold rounded-xl border-slate-200 bg-white">
+                          <SelectValue placeholder="Select Officer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Team (All Officers)</SelectItem>
+                          {SALES_OFFICERS.map(so => (
+                            <SelectItem key={so.id} value={so.name}>{so.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
               </div>
@@ -924,6 +1095,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                     ? stats.teamTargets.tissue 
                     : (allOfficerTargets[filterMonthlySO]?.tissue || targets.tissue)
                   } 
+                  workingDays={workingDays}
                 />
                 <TargetProgress 
                   label="Ballpen Total" 
@@ -933,6 +1105,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                     : (allOfficerTargets[filterMonthlySO]?.ballpen || targets.ballpen)
                   } 
                   colorClass="bg-blue-600"
+                  workingDays={workingDays}
                 />
                 <TargetProgress 
                   label="Exbook Total" 
@@ -942,6 +1115,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                     : (allOfficerTargets[filterMonthlySO]?.exbook || targets.exbook)
                   } 
                   colorClass="bg-indigo-600"
+                  workingDays={workingDays}
                 />
                 <TargetProgress 
                   label="Stationery Total" 
@@ -951,6 +1125,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                     : (allOfficerTargets[filterMonthlySO]?.stationery || targets.stationery)
                   } 
                   colorClass="bg-emerald-600"
+                  workingDays={workingDays}
                 />
               </div>
             </div>
