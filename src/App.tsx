@@ -171,6 +171,7 @@ interface Officer {
 
 interface SystemConfig {
   attendanceEnabled: boolean;
+  stockEnabled: boolean;
 }
 
 // --- Components ---
@@ -300,17 +301,20 @@ const TargetProgress = ({
   current, 
   target, 
   colorClass = "bg-primary",
-  workingDays
+  workingDays,
+  remainingWorkingDays
 }: { 
   label: string; 
   current: number; 
   target: number; 
   colorClass?: string;
   workingDays?: number;
+  remainingWorkingDays?: number;
 }) => {
   const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
   const isCompleted = current >= target;
-  const dailyRequired = workingDays && workingDays > 0 ? Math.round(target / workingDays) : 0;
+  const remainingTarget = Math.max(0, target - current);
+  const remainingDailyRequired = remainingWorkingDays && remainingWorkingDays > 0 ? Math.round(remainingTarget / remainingWorkingDays) : 0;
 
   return (
     <div className="space-y-1.5 w-full">
@@ -318,9 +322,9 @@ const TargetProgress = ({
         <div className="flex flex-col mb-1 block">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{label}</span>
-            {dailyRequired > 0 && (
+            {remainingDailyRequired > 0 && (
               <span className="text-[8px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded tracking-widest border border-amber-200">
-                ৳{dailyRequired.toLocaleString()} / DAY
+                ৳{remainingDailyRequired.toLocaleString()} / DAY
               </span>
             )}
           </div>
@@ -376,7 +380,7 @@ const getWorkingDaysExcludeFridays = (startDateStr: string, endDateStr: string) 
   return count;
 };
 
-const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, systemConfig: SystemConfig }) => {
+const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile: UserProfile, systemConfig: SystemConfig, setSystemConfig: React.Dispatch<React.SetStateAction<SystemConfig>> }) => {
   const isAdmin = userProfile.role === 'admin';
   const MapMarker = Marker as any;
   const [entries, setEntries] = useState<DeliveryEntry[]>([]);
@@ -388,6 +392,10 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
   const [isEditingTargets, setIsEditingTargets] = useState(false);
   const [targetValues, setTargetValues] = useState(MONTHLY_TARGETS);
   const [selectedOfficerForTargetConfig, setSelectedOfficerForTargetConfig] = useState(SALES_OFFICERS[0].name);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 2;
   
   // Location Manager State
   const [assignedLocations, setAssignedLocations] = useState<Record<string, AssignedLocation>>({});
@@ -463,15 +471,22 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
     }
   };
 
-  const handleToggleAttendance = async (enabled: boolean) => {
-    if (userProfile.role !== 'admin') return;
+  const handleToggleFeature = async (feature: keyof SystemConfig, enabled: boolean) => {
+    console.log("handleToggleFeature called", feature, enabled);
+    if (userProfile.role !== 'admin') {
+      console.log("User is not admin");
+      return;
+    }
     try {
-      await setDoc(doc(db, 'settings', 'config'), { attendanceEnabled: enabled }, { merge: true });
-      toast.success(`Attendance feature is now ${enabled ? 'ON' : 'OFF'}`);
+      await setDoc(doc(db, 'settings', 'config'), { [feature]: enabled }, { merge: true });
+      setSystemConfig(prev => ({ ...prev, [feature]: enabled }));
+      toast.success(`${feature} is now ${enabled ? 'ON' : 'OFF'}`);
     } catch (error) {
-      toast.error("Failed to update attendance status");
+      console.error(`Failed to update ${feature} status`, error);
+      toast.error(`Failed to update ${feature} status`);
     }
   };
+
 
   const [filterMonthlySO, setFilterMonthlySO] = useState('all');
   
@@ -506,6 +521,18 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
   });
 
   const workingDays = useMemo(() => getWorkingDaysExcludeFridays(cycleStartDate, cycleEndDate), [cycleStartDate, cycleEndDate]);
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const remainingWorkingDays = useMemo(() => {
+    const todayDate = new Date();
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(todayDate.getDate() - 1);
+    const yesterdayStr = format(yesterdayDate, 'yyyy-MM-dd');
+    
+    // Elapsed working days up to yesterday
+    const elapsedWorkingDays = getWorkingDaysExcludeFridays(cycleStartDate, yesterdayStr);
+    
+    return Math.max(0, workingDays - elapsedWorkingDays);
+  }, [workingDays, cycleStartDate]);
 
   useEffect(() => {
     if (userProfile.role !== 'admin' && filterMonthlySO === 'all') {
@@ -826,7 +853,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
   }, [entries, productEntries, filterMonthlySO]);
 
   const [showWarningModal, setShowWarningModal] = useState(false);
-  const [warningMessage, setWarningMessage] = useState({ title: '', body: '' });
+  const [warningMessage, setWarningMessage] = useState({ title: '', body: '', dailyTarget: 0 });
 
   useEffect(() => {
     if (!userProfile || !stats || loadingDeliveries || loadingProducts) return;
@@ -860,10 +887,15 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
     const roundedCurrent = Math.round(tissueCurrent);
     const shortfall = expectedValue - roundedCurrent;
     
+    const remainingTarget = Math.max(0, tissueTarget - tissueCurrent);
+    const remainingWorkingDaysCount = Math.max(0, workingDays - elapsedWorkingDays);
+    const dailyTargetForPopup = remainingWorkingDaysCount > 0 ? Math.round(remainingTarget / remainingWorkingDaysCount) : 0;
+    
     if (roundedCurrent < expectedValue && expectedValue > 0) {
       setWarningMessage({
         title: "টিস্যু লক্ষ্যমাত্রার চেয়ে পিছিয়ে আছেন!",
-        body: `বর্তমান অর্জন: ৳${roundedCurrent.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nআজকে পর্যন্ত হওয়ার কথা ছিল : ৳${expectedValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nশর্টফল (Shortfall): ৳${shortfall.toLocaleString('en-IN', {maximumFractionDigits: 0})}\n\nদয়া করে লক্ষ্যমাত্রা পূরণে আরও নজর দিন।`
+        body: `বর্তমান অর্জন: ৳${roundedCurrent.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nআজকে পর্যন্ত হওয়ার কথা ছিল : ৳${expectedValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nশর্টফল (Shortfall): ৳${shortfall.toLocaleString('en-IN', {maximumFractionDigits: 0})}\n\nদয়া করে লক্ষ্যমাত্রা পূরণে আরও নজর দিন।`,
+        dailyTarget: dailyTargetForPopup
       });
       setShowWarningModal(true);
     } else {
@@ -893,6 +925,9 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                   <AlertCircle className="w-8 h-8" />
                 </div>
                 <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">{warningMessage.title}</h2>
+                <div className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg mb-4 uppercase tracking-widest border border-amber-200">
+                  আজকের টার্গেট: ৳{warningMessage.dailyTarget.toLocaleString('en-IN')}
+                </div>
                 <p className="text-xs font-bold text-slate-500 mb-8 leading-relaxed whitespace-pre-line">
                   {warningMessage.body}
                 </p>
@@ -973,51 +1008,25 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
           </div>
         )}
 
-        {/* Attendance System View */}
-        {userProfile.role === 'admin' ? (
-          <Card className="bg-white border-none shadow-sm p-4 rounded-2xl overflow-hidden relative">
-            <div className="flex items-center justify-between relative z-10">
-              <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${systemConfig.attendanceEnabled ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <Clock className={`w-4 h-4 ${systemConfig.attendanceEnabled ? 'text-green-600' : 'text-red-600'}`} />
-                </div>
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">Attendance System</h4>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5 tracking-tighter">
-                    Status: <span className={systemConfig.attendanceEnabled ? "text-green-600" : "text-red-500"}>{systemConfig.attendanceEnabled ? "ONLINE" : "OFFLINE"}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex bg-slate-50 p-1 rounded-xl gap-1 border border-slate-100">
-                <button 
-                  onClick={() => handleToggleAttendance(true)}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
-                    systemConfig.attendanceEnabled 
-                      ? "bg-green-600 text-white shadow-sm" 
-                      : "text-slate-400 hover:bg-slate-100"
-                  }`}
-                >
-                  Turn ON
-                </button>
-                <button 
-                  onClick={() => handleToggleAttendance(false)}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
-                    !systemConfig.attendanceEnabled 
-                      ? "bg-red-600 text-white shadow-sm" 
-                      : "text-slate-400 hover:bg-slate-100"
-                  }`}
-                >
-                  Turn OFF
-                </button>
-              </div>
-            </div>
-          </Card>
-        ) : (
-          <div className="p-3 bg-white/50 backdrop-blur-sm rounded-xl border border-slate-100 flex items-center justify-center gap-2">
-             <Clock className={`w-3.5 h-3.5 ${systemConfig.attendanceEnabled ? 'text-emerald-500' : 'text-rose-500'}`} />
-             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-               Attendance System: <span className={systemConfig.attendanceEnabled ? 'text-emerald-600' : 'text-rose-600'}>{systemConfig.attendanceEnabled ? 'Active' : 'Offline'}</span>
-             </p>
+        {/* System Toggle Controls */}
+        {userProfile.role === 'admin' && (
+          <div className="mb-6">
+            {[
+              { id: 'attendanceEnabled', label: 'Attendance' }
+            ].map(feature => (
+              <button 
+                key={feature.id}
+                onClick={() => handleToggleFeature(feature.id as keyof SystemConfig, !systemConfig[feature.id as keyof SystemConfig])}
+                className={`py-2 px-3 rounded-xl flex items-center justify-between text-[10px] font-black uppercase transition-all w-full ${
+                  systemConfig[feature.id as keyof SystemConfig] 
+                    ? "bg-emerald-100 text-emerald-800" 
+                    : "bg-rose-100 text-rose-800"
+                }`}
+              >
+                {feature.label}
+                <div className={`w-2 h-2 rounded-full ${systemConfig[feature.id as keyof SystemConfig] ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -1098,6 +1107,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                     : (allOfficerTargets[filterMonthlySO]?.tissue || targets.tissue)
                   } 
                   workingDays={workingDays}
+                  remainingWorkingDays={remainingWorkingDays}
                 />
                 <TargetProgress 
                   label="Ballpen Total" 
@@ -1108,6 +1118,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                   } 
                   colorClass="bg-blue-600"
                   workingDays={workingDays}
+                  remainingWorkingDays={remainingWorkingDays}
                 />
                 <TargetProgress 
                   label="Exbook Total" 
@@ -1118,6 +1129,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                   } 
                   colorClass="bg-indigo-600"
                   workingDays={workingDays}
+                  remainingWorkingDays={remainingWorkingDays}
                 />
                 <TargetProgress 
                   label="Stationery Total" 
@@ -1128,6 +1140,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                   } 
                   colorClass="bg-emerald-600"
                   workingDays={workingDays}
+                  remainingWorkingDays={remainingWorkingDays}
                 />
               </div>
             </div>
@@ -1254,7 +1267,7 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
           <div className="mt-8 space-y-4">
             <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-widest mb-4">Recent Daily Submissions</h4>
             <AnimatePresence mode="popLayout">
-              {groupedProductEntries.map((group: any) => (
+              {groupedProductEntries.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((group: any) => (
                 <motion.div
                   key={group.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -1295,6 +1308,26 @@ const Dashboard = ({ userProfile, systemConfig }: { userProfile: UserProfile, sy
                 </motion.div>
               ))}
             </AnimatePresence>
+            
+            {groupedProductEntries.length > itemsPerPage && (
+               <div className="flex justify-center items-center gap-2 mt-4">
+                 <button
+                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                   disabled={currentPage === 1}
+                   className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+                 >
+                   Prev
+                 </button>
+                 <span className="text-xs font-bold text-slate-600">Page {currentPage} of {Math.ceil(groupedProductEntries.length / itemsPerPage)}</span>
+                 <button
+                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(groupedProductEntries.length / itemsPerPage)))}
+                   disabled={currentPage === Math.ceil(groupedProductEntries.length / itemsPerPage)}
+                   className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+                 >
+                   Next
+                 </button>
+               </div>
+             )}
 
             {groupedProductEntries.length === 0 && (
               <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-slate-100">
@@ -2413,7 +2446,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                       dayWiseSummaryMap.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                           <td className="p-4 font-black text-slate-800">
-                             {new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                             {!isNaN(new Date(item.date).getTime()) ? new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'Invalid Date'}
                           </td>
                           <td className="p-4 text-right font-bold text-slate-600">{item.pieces}</td>
                           <td className="p-4 text-right font-black text-primary">৳ {item.value.toLocaleString()}</td>
@@ -3364,38 +3397,7 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
 
             {/* Previous Records for SO */}
             <div className="w-full mt-4 space-y-3">
-              <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-4">Last 3 Days</h5>
-              {records
-                .filter(r => (r.soName === userProfile.name || r.soName === userProfile.name.split(' ')[0]) && r.date !== today)
-                .slice(0, 3)
-                .map(r => (
-                  <div key={r.id} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex justify-between items-center group">
-                    <div className="flex-1 mr-4">
-                      <p className="text-xs font-black text-slate-700">{format(new Date(r.date), 'MMM dd, yyyy')}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                          r.status === 'On Time' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                        }`}>{r.status}</span>
-                        {r.locationName && (
-                          <div className="flex items-center gap-1 text-slate-400">
-                            <MapPin className="w-2.5 h-2.5" />
-                            <p className="text-[9px] font-bold uppercase truncate max-w-[120px]">
-                              {r.locationName.split('|')[0]}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-black text-slate-500 block text-sm">{r.checkInTime}</span>
-                      {r.location && (
-                        <a href={r.location} target="_blank" rel="noreferrer" className="text-[8px] font-black text-primary uppercase flex items-center justify-end gap-0.5 mt-1 opacity-60 hover:opacity-100 transition-opacity">
-                          View Map
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+
             </div>
           </CardContent>
         </Card>
@@ -3986,6 +3988,10 @@ const AdminPanel = () => {
   const [legacyEntries, setLegacyEntries] = useState<any[]>([]);
   const [productGroups, setProductGroups] = useState<any[]>([]);
   
+  // Master Logs Pagination
+  const [logsPage, setLogsPage] = useState(1);
+  const logsPerPage = 5;
+  
   const allEntries = useMemo(() => {
     return [...legacyEntries, ...productGroups];
   }, [legacyEntries, productGroups]);
@@ -4449,7 +4455,7 @@ const AdminPanel = () => {
         </div>
         
         <div className="space-y-0">
-          {filtered.map((entry) => (
+          {filtered.slice((logsPage - 1) * logsPerPage, logsPage * logsPerPage).map((entry) => (
             <div key={entry.id} className="bg-white p-6 border-b border-slate-50 flex flex-col gap-4 group relative">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -4570,6 +4576,26 @@ const AdminPanel = () => {
             </div>
           ))}
         </div>
+        
+        {filtered.length > logsPerPage && (
+           <div className="flex justify-center items-center gap-2 py-4">
+             <button
+               onClick={() => setLogsPage(prev => Math.max(prev - 1, 1))}
+               disabled={logsPage === 1}
+               className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+             >
+               Prev
+             </button>
+             <span className="text-xs font-bold text-slate-600">Page {logsPage} of {Math.ceil(filtered.length / logsPerPage)}</span>
+             <button
+               onClick={() => setLogsPage(prev => Math.min(prev + 1, Math.ceil(filtered.length / logsPerPage)))}
+               disabled={logsPage === Math.ceil(filtered.length / logsPerPage)}
+               className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+             >
+               Next
+             </button>
+           </div>
+        )}
       </div>
       </>
       )}
@@ -4581,7 +4607,19 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [systemConfig, setSystemConfig] = useState<SystemConfig>({ attendanceEnabled: true });
+  const [systemConfig, setSystemConfig] = useState<SystemConfig>({ attendanceEnabled: true, stockEnabled: true });
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as SystemConfig;
+        setSystemConfig(prev => ({ ...prev, ...data }));
+      }
+    }, (error) => {
+      console.error("Config listener error:", error);
+    });
+    return () => unsubConfig();
+  }, []);
 
   async function handleLogout() {
     await signOut(auth);
@@ -4589,15 +4627,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    const unsubConfig = onSnapshot(doc(db, 'settings', 'config'), (snap) => {
-      if (snap.exists()) {
-        setSystemConfig(snap.data() as SystemConfig);
-      }
-    }, (error) => {
-      console.error("Config listener error:", error);
-      handleFirestoreError(error, OperationType.GET, 'settings/config');
-    });
-
+    // Config removed
     let unsubProfile: (() => void) | null = null;
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
@@ -4643,7 +4673,6 @@ export default function App() {
     });
 
     return () => {
-      unsubConfig();
       unsubscribeAuth();
       if (unsubProfile) unsubProfile();
     };
@@ -4732,17 +4761,13 @@ export default function App() {
                     <Routes>
                       <Route index element={
                           <div className="overflow-y-auto custom-scrollbar h-full">
-                            <Dashboard userProfile={profile} systemConfig={systemConfig} />
+                            <Dashboard userProfile={profile} systemConfig={systemConfig} setSystemConfig={setSystemConfig} />
                           </div>
                       } />
                       <Route path="attendance" element={
-                        systemConfig.attendanceEnabled || profile.role === 'admin' ? (
-                          <div className="h-full overflow-y-auto custom-scrollbar">
+                        <div className="h-full overflow-y-auto custom-scrollbar">
                             <Attendance userProfile={profile} />
-                          </div>
-                        ) : (
-                          <Navigate to="/" replace />
-                        )
+                        </div>
                       } />
                       <Route path="product" element={
                         <div className="h-full overflow-y-auto custom-scrollbar">
@@ -4773,7 +4798,7 @@ export default function App() {
                       <LayoutDashboard className="w-5 h-5" />
                       <span className="text-[10px] font-bold uppercase">Home</span>
                     </Link>
-                    {(systemConfig.attendanceEnabled || profile.role === 'admin') && (
+                    {systemConfig.attendanceEnabled && (
                       <Link to="/attendance" className={`flex flex-col items-center gap-1 transition-colors ${window.location.hash.includes('attendance') ? 'text-primary' : 'text-slate-400'}`}>
                         <Clock className="w-5 h-5" />
                         <span className="text-[10px] font-bold uppercase">Attendance</span>
