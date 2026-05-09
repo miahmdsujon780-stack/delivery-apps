@@ -302,7 +302,8 @@ const TargetProgress = ({
   target, 
   colorClass = "bg-primary",
   workingDays,
-  remainingWorkingDays
+  remainingWorkingDays,
+  isBehind = false
 }: { 
   label: string; 
   current: number; 
@@ -310,6 +311,7 @@ const TargetProgress = ({
   colorClass?: string;
   workingDays?: number;
   remainingWorkingDays?: number;
+  isBehind?: boolean;
 }) => {
   const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
   const isCompleted = current >= target;
@@ -334,7 +336,7 @@ const TargetProgress = ({
           </div>
         </div>
         <div className="flex flex-col items-end">
-          <span className={`text-xs font-black ${isCompleted ? 'text-green-600' : 'text-slate-900'}`}>
+          <span className={`text-xs font-black ${isBehind ? 'text-red-500' : 'text-green-600'}`}>
             {percentage}%
           </span>
           {isCompleted && (
@@ -347,7 +349,7 @@ const TargetProgress = ({
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}
           transition={{ duration: 1, ease: "easeOut" }}
-          className={`h-full rounded-full ${isCompleted ? 'bg-green-500' : colorClass} shadow-sm`}
+          className={`h-full rounded-full ${isBehind ? 'bg-red-500' : 'bg-green-500'} shadow-sm`}
         />
       </div>
     </div>
@@ -504,6 +506,14 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
     }
     return format(new Date(year, month, 26), 'yyyy-MM-dd');
   });
+  
+  const elapsedWorkingDays = useMemo(() => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+    return getWorkingDaysExcludeFridays(cycleStartDate, yesterdayStr);
+  }, [cycleStartDate]);
 
   const [cycleEndDate, setCycleEndDate] = useState(() => {
     const today = new Date();
@@ -853,7 +863,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
   }, [entries, productEntries, filterMonthlySO]);
 
   const [showWarningModal, setShowWarningModal] = useState(false);
-  const [warningMessage, setWarningMessage] = useState({ title: '', body: '', dailyTarget: 0 });
+  const [warningMessage, setWarningMessage] = useState({ title: '', body: '', dailyTarget: 0, remainingDays: 0 });
 
   useEffect(() => {
     if (!userProfile || !stats || loadingDeliveries || loadingProducts) return;
@@ -895,7 +905,8 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
       setWarningMessage({
         title: "টিস্যু লক্ষ্যমাত্রার চেয়ে পিছিয়ে আছেন!",
         body: `বর্তমান অর্জন: ৳${roundedCurrent.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nআজকে পর্যন্ত হওয়ার কথা ছিল : ৳${expectedValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nশর্টফল (Shortfall): ৳${shortfall.toLocaleString('en-IN', {maximumFractionDigits: 0})}\n\nদয়া করে লক্ষ্যমাত্রা পূরণে আরও নজর দিন।`,
-        dailyTarget: dailyTargetForPopup
+        dailyTarget: dailyTargetForPopup,
+        remainingDays: remainingWorkingDaysCount
       });
       setShowWarningModal(true);
     } else {
@@ -925,8 +936,13 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                   <AlertCircle className="w-8 h-8" />
                 </div>
                 <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">{warningMessage.title}</h2>
-                <div className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg mb-4 uppercase tracking-widest border border-amber-200">
-                  আজকের টার্গেট: ৳{warningMessage.dailyTarget.toLocaleString('en-IN')}
+                <div className="flex gap-2 mb-4">
+                  <div className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg uppercase tracking-widest border border-amber-200">
+                    আজকের টার্গেট: ৳{warningMessage.dailyTarget.toLocaleString('en-IN')}
+                  </div>
+                  <div className="text-xs font-bold text-white bg-red-600 px-3 py-2 rounded-lg uppercase tracking-widest">
+                    আর ডেলিভারি আছে : {warningMessage.remainingDays} দিন
+                  </div>
                 </div>
                 <p className="text-xs font-bold text-slate-500 mb-8 leading-relaxed whitespace-pre-line">
                   {warningMessage.body}
@@ -1108,6 +1124,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                   } 
                   workingDays={workingDays}
                   remainingWorkingDays={remainingWorkingDays}
+                  isBehind={workingDays > 0 && stats.monthlyTissueV < ((filterMonthlySO === 'all' ? stats.teamTargets.tissue : (allOfficerTargets[filterMonthlySO]?.tissue || targets.tissue)) * (elapsedWorkingDays / workingDays))}
                 />
                 <TargetProgress 
                   label="Ballpen Total" 
@@ -1119,6 +1136,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                   colorClass="bg-blue-600"
                   workingDays={workingDays}
                   remainingWorkingDays={remainingWorkingDays}
+                  isBehind={workingDays > 0 && stats.monthlyBallpenV < ((filterMonthlySO === 'all' ? stats.teamTargets.ballpen : (allOfficerTargets[filterMonthlySO]?.ballpen || targets.ballpen)) * (elapsedWorkingDays / workingDays))}
                 />
                 <TargetProgress 
                   label="Exbook Total" 
@@ -1130,6 +1148,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                   colorClass="bg-indigo-600"
                   workingDays={workingDays}
                   remainingWorkingDays={remainingWorkingDays}
+                  isBehind={workingDays > 0 && stats.monthlyExbookV < ((filterMonthlySO === 'all' ? stats.teamTargets.exbook : (allOfficerTargets[filterMonthlySO]?.exbook || targets.exbook)) * (elapsedWorkingDays / workingDays))}
                 />
                 <TargetProgress 
                   label="Stationery Total" 
@@ -1141,6 +1160,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                   colorClass="bg-emerald-600"
                   workingDays={workingDays}
                   remainingWorkingDays={remainingWorkingDays}
+                  isBehind={workingDays > 0 && stats.monthlyStationeryV < ((filterMonthlySO === 'all' ? stats.teamTargets.stationery : (allOfficerTargets[filterMonthlySO]?.stationery || targets.stationery)) * (elapsedWorkingDays / workingDays))}
                 />
               </div>
             </div>
