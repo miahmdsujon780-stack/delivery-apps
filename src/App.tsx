@@ -222,7 +222,11 @@ const Login = ({ onLoginSuccess }: {
       await setDoc(doc(db, 'users', user.uid), profile, { merge: true });
       // The listener in AttendanceApp will pick up the full profile (including assignedLocation)
       toast.success(`স্বাগতম, ${selectedSO}!`);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.info("লগইন বাতিল করা হয়েছে।");
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, `users/${auth.currentUser?.uid || 'unknown'}`);
     } finally {
       setLoading(false);
@@ -2705,8 +2709,8 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const parseCoords = (locationName?: string) => {
     if (!locationName) return null;
     const parts = locationName.split('|');
-    if (parts.length < 3) return null;
-    const coordLine = parts[2];
+    const coordLine = parts.find(p => p.includes("Lat") && p.includes("Long"));
+    if (!coordLine) return null;
     const latMatch = coordLine.match(/Lat ([\d.-]+)/);
     const lonMatch = coordLine.match(/Long ([\d.-]+)/);
     if (latMatch && lonMatch) {
@@ -2828,15 +2832,26 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
   }, [showCamera, stream]);
 
   const startCamera = async () => {
+    // Ensure any previous stream is completely shut down before starting a new one.
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      // Add a small delay to ensure hardware releases before re-opening
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
     try {
       setShowCamera(true);
       const s = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } } 
+        video: true 
       });
       setStream(s);
-    } catch (err) {
-      console.error("Camera access error:", err);
-      toast.error("Could not access camera. Please check permissions.");
+    } catch (err: any) {
+      console.error("Camera access error:", err.name, err.message);
+      if (err.name === 'NotReadableError') {
+        toast.error("Camera is busy. Please close other apps or browser tabs using your camera and try again.");
+      } else {
+        toast.error(`Could not access camera (${err.name}). Please check browser camera permissions.`);
+      }
       setShowCamera(false);
     }
   };
@@ -2960,6 +2975,31 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
         locationLink = `https://www.google.com/maps?q=${currentLat},${currentLon}`;
 
         // 3. Location Pin Enforcement (STRICT)
+        let address = "Location Data...";
+        if (hasValidGPS) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${currentLat}&lon=${currentLon}&zoom=18&addressdetails=1`, {
+              signal: controller.signal,
+              headers: { 'User-Agent': 'DMP-PRO-App/1.5' }
+            });
+            clearTimeout(timeoutId);
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && data.address) {
+                const a = data.address;
+                address = [a.road, a.suburb, a.city || a.town || a.village].filter(Boolean).join(', ');
+              } else if (data.display_name) {
+                address = data.display_name.split(',').slice(0, 2).join(', ');
+              }
+            }
+          } catch (e) {
+            console.error("Address fetch failed:", e);
+            address = "Lat/Lon Only";
+          }
+        }
+
         if (finalLock) {
           const lat1 = currentLat;
           const lon1 = currentLon;
@@ -2969,9 +3009,6 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
           const dist = getDistance(lat1, lon1, lat2, lon2);
           const maxAllowed = finalLock.radius || 200;
           
-          // Debugging log for support
-          console.log("Strict Check (Live):", { dist, maxAllowed, current: [lat1, lon1], target: [lat2, lon2] });
-          
           if (dist > maxAllowed) {
             toast.error(`লোকেশন লক করা হয়েছে! আপনি ${finalLock.name} থেকে ${Math.round(dist)} মিটার দূরে আছেন। চেক-ইন করার জন্য আপনাকে ওই এলাকার ${maxAllowed} মিটারের মধ্যে থাকতে হবে।`, {
               duration: 10000,
@@ -2980,8 +3017,13 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
             setSubmitting(false);
             return;
           } else {
-            locationName = `📍 [লকড এরিয়া] ${finalLock.name}|পরিমাপ: ${Math.round(dist)} মিটার ভেতরে|Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}`;
+            const rawName = finalLock.name || "Unknown Location";
+            const cleanedDisplayName = rawName.replace(/\[.*\]/g, '').replace(/DB POINT/gi, '').trim();
+            const displayName = (address !== "Location Data..." && address !== "Lat/Lon Only") ? address : (cleanedDisplayName || rawName);
+            locationName = `${displayName}|Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}|${new Date().toLocaleString('bn-BD')}`;
           }
+        } else {
+          locationName = `Manual GPS Fix|${address}|Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}|${new Date().toLocaleString('bn-BD')}`;
         }
       } catch (gpsError: any) {
         console.error("GPS Verification Error:", gpsError);
@@ -2994,41 +3036,6 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
         }
         
         toast.warning("GPS সিগন্যাল পাওয়া যায়নি। লোকেশন ছাড়াই সেভ করা হচ্ছে।");
-      }
-
-      // 4. Geocoding (only if not already set by lock label)
-      if (hasValidGPS && !locationName) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 7000);
-          
-          const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${currentLat}&lon=${currentLon}&zoom=18&addressdetails=1`, {
-            signal: controller.signal,
-            headers: { 'User-Agent': 'DMP-PRO-App/1.5' }
-          });
-          clearTimeout(timeoutId);
-
-          if (resp.status === 429) {
-            console.warn("Nominatim Rate Limit Hit - Falling back to coordinates");
-            locationName = `Coordinates Only|Network Busy|Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}`;
-          } else if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.address) {
-              const a = data.address;
-              const l1 = [a.city || a.town || a.village || a.suburb, a.state_district || a.state, a.country].filter(Boolean).join(', ');
-              const l2 = [a.road, a.neighbourhood, a.suburb, a.city_district].filter(Boolean).slice(0, 3).join(', ');
-              const l3 = `Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}`;
-              locationName = `${l1}|${l2}|${l3}`;
-            } else {
-              locationName = `Location Identified|Map Available|Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}`;
-            }
-          } else {
-            locationName = `Location Recorded|Direct GPS Mode|Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}`;
-          }
-        } catch (revError) {
-          console.error("Geocoding failed:", revError);
-          locationName = `Manual GPS Fix|System Offline|Lat ${currentLat.toFixed(7)} / Long ${currentLon.toFixed(7)}`;
-        }
       }
 
       const attendanceData = {
