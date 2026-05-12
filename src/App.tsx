@@ -317,7 +317,7 @@ const TargetProgress = ({
   remainingWorkingDays?: number;
   isBehind?: boolean;
 }) => {
-  const percentage = target > 0 ? Math.min(Math.round((current / target) * 100), 100) : 0;
+  const percentage = target > 0 ? Math.round((current / target) * 100) : 0;
   const isCompleted = current >= target;
   const remainingTarget = Math.max(0, target - current);
   const remainingDailyRequired = remainingWorkingDays && remainingWorkingDays > 0 ? Math.round(remainingTarget / remainingWorkingDays) : 0;
@@ -351,7 +351,7 @@ const TargetProgress = ({
       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-50 flex items-center p-[1px]">
         <motion.div 
           initial={{ width: 0 }}
-          animate={{ width: `${percentage}%` }}
+          animate={{ width: `${Math.min(percentage, 100)}%` }}
           transition={{ duration: 1, ease: "easeOut" }}
           className={`h-full rounded-full ${isBehind ? 'bg-red-500' : 'bg-green-500'} shadow-sm`}
         />
@@ -1958,12 +1958,9 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
+    if (!selectedProduct) return;
 
-    if (!route || !route.trim()) {
-      toast.error("প্রথমে রুটের নাম দিন (Enter Route Name first)");
-      return;
-    }
-
+    // Validate inputs
     const requiresBoth = ['BALLPEN', 'STATIONERY'].includes(selectedProduct || '');
     const requiresValueOnly = selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue';
 
@@ -1978,74 +1975,25 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const amountToDeduct = requiresValueOnly ? Number(value) : Number(pieces);
-      
-      // Do not deduct stock for Total tissue as it doesn't exist in stock
-      if (amountToDeduct && amountToDeduct > 0 && selectedProduct !== 'Total tissue') {
-        const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
-        if (assignedDealer) {
-          const stockQuery = query(
-            collection(db, "stock_items"), 
-            where("name", "==", selectedProduct?.trim() || ""), 
-            where("dealer", "==", assignedDealer.name)
-          );
-          const stockSnap = await getDocs(stockQuery);
-          
-          if (!stockSnap.empty) {
-            const stockDoc = stockSnap.docs[0];
-            const currentQuantity = Number(stockDoc.data().quantity || 0);
-            await updateDoc(doc(db, "stock_items", stockDoc.id), {
-              quantity: currentQuantity - amountToDeduct,
-              updatedAt: serverTimestamp()
-            });
-          } else {
-            toast.error("স্টক পাওয়া যায়নি। স্টক আপডেট হয়নি।");
-            setIsSubmitting(false);
-            return;
-          }
-        } else {
-          toast.error("আপনার কোনো ডিলার অ্যাসাইন করা নেই। স্টক আপডেট হয়নি।");
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
-      if (!memo || !memo.trim()) {
-        toast.error("Memo প্রদান করুন। এটি বাধ্যতামূলক।");
-        setIsSubmitting(false);
-        return;
-      }
-
-      await addDoc(collection(db, 'product_entries'), {
-        date: entryDate,
-        route: route || '',
-        productName: selectedProduct,
-        pieces: Number(pieces),
-        value: Number(value),
-        soName: userProfile.name,
-        soId: userProfile.uniqueId,
-        userId: userProfile.uid,
-        memo: memo || '',
-        timestamp: serverTimestamp()
-      });
-
-      toast.success(`${selectedProduct} সফলভাবে সাবমিট করা হয়েছে`);
-      setSelectedProduct(null);
-      setPieces('');
-      setValue('');
-    } catch (err) {
-      console.error(err);
-      handleFirestoreError(err, OperationType.WRITE, 'product_entries');
-    } finally {
-      setIsSubmitting(false);
-    }
+    // Add to local state
+    const newItem = {
+      productName: selectedProduct,
+      pieces: Number(pieces),
+      value: Number(value),
+      timestamp: new Date()
+    };
+    setPendingOrderItems(prev => [...prev, newItem]);
+    
+    toast.success(`${selectedProduct} যোগ করা হয়েছে`);
+    setSelectedProduct(null);
+    setPieces('');
+    setValue('');
   };
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPieces, setEditPieces] = useState('');
   const [editValue, setEditValue] = useState('');
+  const [pendingOrderItems, setPendingOrderItems] = useState<any[]>([]);
 
   const handleDeleteRecord = async (id: string) => {
     if (!window.confirm("আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?")) return;
@@ -2328,7 +2276,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
             
             <div className="flex flex-col items-center mt-8 px-4 w-full">
               <Button 
-                onClick={() => {
+                onClick={async () => {
                    if (!route || !route.trim()) {
                      toast.error("রুটের নাম প্রদান করুন");
                      return;
@@ -2337,13 +2285,81 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                      toast.error("Memo প্রদান করুন");
                      return;
                    }
-                   toast.success("প্রোডাক্ট এন্ট্রি সম্পন্ন হয়েছে");
-                   setRoute('');
-                   setMemo('');
+                   if (pendingOrderItems.length === 0) {
+                     toast.error("কোনো প্রোডাক্ট যোগ করা হয়নি");
+                     return;
+                   }
+
+                   setIsSubmitting(true);
+                   try {
+                     const batch = writeBatch(db);
+                     const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
+                     
+                     if (!assignedDealer) {
+                        toast.error("আপনার কোনো ডিলার অ্যাসাইন করা নেই।");
+                        setIsSubmitting(false);
+                        return;
+                     }
+
+                     for (const item of pendingOrderItems) {
+                       const amountToDeduct = item.pieces || item.value || 0;
+                       
+                       // Stock deduction
+                       if (amountToDeduct > 0 && item.productName !== 'Total tissue') {
+                         const stockQuery = query(
+                           collection(db, "stock_items"), 
+                           where("name", "==", item.productName?.trim() || ""), 
+                           where("dealer", "==", assignedDealer.name)
+                         );
+                         const stockSnap = await getDocs(stockQuery);
+                         
+                         if (!stockSnap.empty) {
+                           const stockDoc = stockSnap.docs[0];
+                           const currentQuantity = Number(stockDoc.data().quantity || 0);
+                           if (currentQuantity < amountToDeduct) {
+                             throw new Error(`স্টক অপর্যাপ্ত: ${item.productName}`);
+                           }
+                           batch.update(doc(db, "stock_items", stockDoc.id), {
+                             quantity: currentQuantity - amountToDeduct,
+                             updatedAt: serverTimestamp()
+                           });
+                         } else {
+                           throw new Error(`স্টক পাওয়া যায়নি: ${item.productName}`);
+                         }
+                       }
+
+                       // Add to product_entries
+                       const entryRef = doc(collection(db, 'product_entries'));
+                       batch.set(entryRef, {
+                         date: entryDate,
+                         route: route || '',
+                         productName: item.productName,
+                         pieces: Number(item.pieces || 0),
+                         value: Number(item.value || 0),
+                         soName: userProfile.name,
+                         soId: userProfile.uniqueId,
+                         userId: userProfile.uid,
+                         memo: memo || '',
+                         timestamp: serverTimestamp()
+                       });
+                     }
+
+                     await batch.commit();
+                     setPendingOrderItems([]);
+                     setRoute('');
+                     setMemo('');
+                     toast.success("সকল প্রোডাক্ট সফলভাবে সাবমিট করা হয়েছে");
+                   } catch (err: any) {
+                     console.error(err);
+                     toast.error(err.message || "সাবমিশনে সমস্যা হয়েছে");
+                   } finally {
+                     setIsSubmitting(false);
+                   }
                 }}
+                disabled={isSubmitting}
                 className="w-full max-w-sm h-14 bg-primary text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-lg shadow-primary/20 hover:shadow-xl transition-all"
               >
-                Complete Submission
+                {isSubmitting ? 'Submitting...' : 'Complete Submission'}
               </Button>
               
               <div className="w-full max-w-sm">
