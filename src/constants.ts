@@ -12,7 +12,9 @@ export const PRODUCTS = [
   { name: "K/N", category: "Tissue" },
   { name: "Total tissue", category: "Tissue" },
   { name: "EXBOOK", category: "Stationery" },
-  { name: "BALLPEN", category: "Stationery" },
+  { name: "BALLPEN ( 5 Tk )", category: "Stationery" },
+  { name: "BALLPEN ( 6-7 Tk )", category: "Stationery" },
+  { name: "BALLPEN ( 10 Tk )", category: "Stationery" },
   { name: "STATIONERY", category: "Stationery" },
 ];
 

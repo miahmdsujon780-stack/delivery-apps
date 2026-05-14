@@ -732,7 +732,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
       const v = Number(entry.value) || 0;
       if (entry.productName === 'Total tissue') {
         group.tissueP += p; group.tissueV += v;
-      } else if (entry.productName === 'BALLPEN') {
+      } else if (entry.productName.includes('BALLPEN')) {
         group.ballpenP += p; group.ballpenV += v;
       } else if (entry.productName === 'EXBOOK') {
         group.exbookP += p; group.exbookV += v;
@@ -754,7 +754,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
     productEntries.forEach(curr => {
       const p = Number(curr.pieces) || 0;
       if (curr.productName === 'Total tissue') acc.tissue += p;
-      else if (curr.productName === 'BALLPEN') acc.ballpen += p;
+      else if (curr.productName.includes('BALLPEN')) acc.ballpen += p;
       else if (curr.productName === 'EXBOOK') acc.exbook += p;
       else if (curr.productName === 'STATIONERY') acc.stationery += p;
     });
@@ -776,7 +776,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
     productEntries.forEach(curr => {
       const v = Number(curr.value) || 0;
       if (curr.productName === 'Total tissue') acc.tissue += v;
-      else if (curr.productName === 'BALLPEN') acc.ballpen += v;
+      else if (curr.productName.includes('BALLPEN')) acc.ballpen += v;
       else if (curr.productName === 'EXBOOK') acc.exbook += v;
       else if (curr.productName === 'STATIONERY') acc.stationery += v;
     });
@@ -848,7 +848,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
       monthlyTissue: monthlyLegacy.reduce((acc, curr) => acc + (curr.tissue || 0), 0) +
                      monthlyProducts.filter(e => e.productName === 'Total tissue').reduce((acc, curr) => acc + (Number(curr.pieces) || 0), 0),
       monthlyBallpen: monthlyLegacy.reduce((acc, curr) => acc + (curr.ballpen || 0), 0) +
-                      monthlyProducts.filter(e => e.productName === 'BALLPEN').reduce((acc, curr) => acc + (Number(curr.pieces) || 0), 0),
+                      monthlyProducts.filter(e => e.productName.includes('BALLPEN')).reduce((acc, curr) => acc + (Number(curr.pieces) || 0), 0),
       monthlyExbook: monthlyLegacy.reduce((acc, curr) => acc + (curr.exbook || 0), 0) +
                      monthlyProducts.filter(e => e.productName === 'EXBOOK').reduce((acc, curr) => acc + (Number(curr.pieces) || 0), 0),
       monthlyStationery: monthlyLegacy.reduce((acc, curr) => acc + (curr.stationery || 0), 0) +
@@ -858,7 +858,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
       monthlyTissueV: monthlyLegacy.reduce((acc, curr) => acc + (curr.tissue || 0), 0) +
                       monthlyProducts.filter(e => e.productName === 'Total tissue').reduce((acc, curr) => acc + (Number(curr.value) || 0), 0),
       monthlyBallpenV: monthlyLegacy.reduce((acc, curr) => acc + (curr.ballpen || 0), 0) +
-                       monthlyProducts.filter(e => e.productName === 'BALLPEN').reduce((acc, curr) => acc + (Number(curr.value) || 0), 0),
+                       monthlyProducts.filter(e => e.productName.includes('BALLPEN')).reduce((acc, curr) => acc + (Number(curr.value) || 0), 0),
       monthlyExbookV: monthlyLegacy.reduce((acc, curr) => acc + (curr.exbook || 0), 0) +
                       monthlyProducts.filter(e => e.productName === 'EXBOOK').reduce((acc, curr) => acc + (Number(curr.value) || 0), 0),
       monthlyStationeryV: monthlyLegacy.reduce((acc, curr) => acc + (curr.stationery || 0), 0) +
@@ -1762,16 +1762,17 @@ const OfficerStockView = ({ userProfile }: { userProfile: UserProfile | null }) 
 
   const getProductValue = (productName: string) => {
     return stock
-      .filter((item) => item.name === productName)
+      .filter((item) => (productName === 'BALLPEN' ? item.name.includes('BALLPEN') : item.name === productName))
       .reduce((acc, curr) => acc + ((curr.quantity || 0) * (curr.rate || 0)), 0);
   };
 
   const totalTissueValue = getCategoryValue('Tissue');
   const exbookValue = getProductValue('EXBOOK');
-  const ballpenValue = getProductValue('BALLPEN');
-  const stationeryValue = getProductValue('STATIONERY');
-
-  const grandTotal = totalTissueValue + exbookValue + ballpenValue + stationeryValue;
+  const ballpenItems = stock.filter((item) => item.name.includes('BALLPEN'));
+  const ballpenTotalValue = ballpenItems.reduce((acc, curr) => acc + ((curr.quantity || 0) * (curr.rate || 0)), 0);
+  const stationeryOnlyValue = getProductValue('STATIONERY');
+  const stationeryValue = stationeryOnlyValue; 
+  const grandTotal = totalTissueValue + exbookValue + ballpenTotalValue + stationeryValue;
 
   return (
     <div className="space-y-4 pt-2">
@@ -1799,7 +1800,7 @@ const OfficerStockView = ({ userProfile }: { userProfile: UserProfile | null }) 
                     <p className="font-bold text-slate-800 text-sm">{item.name}</p>
                   </div>
                   <div className="text-right">
-                    {item.name === 'EXBOOK' ? (
+                    {(item.name === 'EXBOOK' || item.name === 'STATIONERY') ? (
                       <p className="font-black text-lg text-primary">
                         <span className="text-[10px] font-bold text-slate-400 mr-1">৳</span>{item.quantity.toLocaleString()}
                       </p>
@@ -1838,15 +1839,15 @@ const OfficerStockView = ({ userProfile }: { userProfile: UserProfile | null }) 
               </div>
               <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
-                  <p className="font-bold text-slate-800 text-sm uppercase">BALLPEN Value</p>
+                  <p className="font-bold text-slate-800 text-sm uppercase">BALLPEN Total Value</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-lg text-primary">৳ {ballpenValue.toLocaleString()}</p>
+                  <p className="font-black text-lg text-primary">৳ {ballpenTotalValue.toLocaleString()}</p>
                 </div>
               </div>
               <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
-                  <p className="font-bold text-slate-800 text-sm uppercase">STATIONERY Value</p>
+                  <p className="font-bold text-slate-800 text-sm uppercase">STATIONERY VALUE</p>
                 </div>
                 <div className="text-right">
                   <p className="font-black text-lg text-primary">৳ {stationeryValue.toLocaleString()}</p>
@@ -1912,7 +1913,9 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     { name: "K/N", category: "Tissue" },
     { name: "Total tissue", category: "Tissue" },
     { name: "EXBOOK", category: "Stationery" },
-    { name: "BALLPEN", category: "Stationery" },
+    { name: "BALLPEN ( 5 Tk )", category: "Stationery" },
+    { name: "BALLPEN ( 6-7 Tk )", category: "Stationery" },
+    { name: "BALLPEN ( 10 Tk )", category: "Stationery" },
     { name: "STATIONERY", category: "Stationery" },
   ];
 
@@ -1961,7 +1964,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     if (!selectedProduct) return;
 
     // Validate inputs
-    const requiresBoth = ['BALLPEN', 'STATIONERY'].includes(selectedProduct || '');
+    const requiresBoth = (selectedProduct || '').includes('BALLPEN') || selectedProduct === 'STATIONERY';
     const requiresValueOnly = selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue';
 
     if (requiresValueOnly && !value) {
@@ -2000,8 +2003,8 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     try {
       const record = records.find(r => r.id === id);
       if (record && !id.includes('_')) {
-        const requiresValueOnly = record.productName === 'EXBOOK' || record.productName === 'Total tissue';
-        const amountToRestore = requiresValueOnly ? Number(record.value) : Number(record.pieces);
+        const usesValueForStock = record.productName === 'EXBOOK' || record.productName === 'STATIONERY' || record.productName === 'Total tissue';
+        const amountToRestore = usesValueForStock ? Number(record.value) : Number(record.pieces);
         
         // Do not update stock for Total tissue
         if (amountToRestore && amountToRestore > 0 && record.productName !== 'Total tissue') {
@@ -2056,9 +2059,9 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
       } else {
         const record = records.find(r => r.id === id);
         if (record) {
-          const requiresValueOnly = record.productName === 'EXBOOK' || record.productName === 'Total tissue';
-          const originalAmount = requiresValueOnly ? Number(record.value) : Number(record.pieces);
-          const newAmount = requiresValueOnly ? Number(editValue) : Number(editPieces);
+          const usesValueForStock = record.productName === 'EXBOOK' || record.productName === 'STATIONERY' || record.productName === 'Total tissue';
+          const originalAmount = usesValueForStock ? Number(record.value) : Number(record.pieces);
+          const newAmount = usesValueForStock ? Number(editValue) : Number(editPieces);
           const difference = newAmount - originalAmount;
 
           if (difference !== 0 && record.productName !== 'Total tissue') {
@@ -2302,7 +2305,8 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                      }
 
                      for (const item of pendingOrderItems) {
-                       const amountToDeduct = item.pieces || item.value || 0;
+                       const usesValueForStock = item.productName === 'EXBOOK' || item.productName === 'STATIONERY' || item.productName === 'Total tissue';
+                       const amountToDeduct = usesValueForStock ? (Number(item.value) || 0) : (Number(item.pieces) || 0);
                        
                        // Stock deduction
                        if (amountToDeduct > 0 && item.productName !== 'Total tissue') {
@@ -2637,7 +2641,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
               <div className="text-center mb-6">
                 <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{selectedProduct}</h3>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">
-                  {(selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue') ? 'মূল্য প্রদান করুন' : ['BALLPEN', 'STATIONERY'].includes(selectedProduct || '') ? 'পরিমাণ এবং মূল্য প্রদান করুন' : 'পরিমাণ প্রদান করুন'}
+                  {(selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue') ? 'মূল্য প্রদান করুন' : ((selectedProduct || '').includes('BALLPEN') || selectedProduct === 'STATIONERY') ? 'পরিমাণ এবং মূল্য প্রদান করুন' : 'পরিমাণ প্রদান করুন'}
                 </p>
               </div>
 
@@ -2651,11 +2655,11 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                       onChange={(e) => setPieces(e.target.value)}
                       placeholder="0"
                       className="w-full bg-slate-50 border-none rounded-2xl p-4 text-slate-900 font-bold focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-slate-300"
-                      required={(selectedProduct !== 'EXBOOK' && selectedProduct !== 'Total tissue') && !['BALLPEN', 'STATIONERY'].includes(selectedProduct || '') ? true : undefined}
+                      required={(selectedProduct !== 'EXBOOK' && selectedProduct !== 'Total tissue') && !((selectedProduct || '').includes('BALLPEN') || selectedProduct === 'STATIONERY') ? true : undefined}
                     />
                   </div>
                 )}
-                {(selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue' || ['BALLPEN', 'STATIONERY'].includes(selectedProduct || '')) && (
+                {(selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue' || (selectedProduct || '').includes('BALLPEN') || selectedProduct === 'STATIONERY') && (
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Value (মূল্য)</label>
                     <input
@@ -3694,7 +3698,8 @@ const StockPanel = () => {
     return () => unsub();
   }, []);
 
-  const isValueOnly = name === 'EXBOOK';
+  const selectedProduct = PRODUCTS.find((p) => p.name === name);
+  const isValueOnly = name === 'EXBOOK' || name === 'STATIONERY';
 
   const saveItem = async () => {
     if (!name || (!quantity && quantity !== '0')) return;
@@ -3705,9 +3710,15 @@ const StockPanel = () => {
     );
 
     const finalRate = isValueOnly ? 1 : Number(rate);
+    const finalQuantity = isValueOnly ? Number(quantity) : Number(quantity);
 
     try {
       if (existingItem) {
+        // If it's value only, quantity actually represents value.
+        // For existing stationery items, we probably want to accumulateValue?
+        // Wait, for EXBOOK it seems quantity is used to store value??
+        // 3715: const newQuantity = (Number(existingItem.quantity) || 0) + Number(quantity);
+        // Yes, it accumulates quantity which is treated as value.
         const newQuantity = (Number(existingItem.quantity) || 0) + Number(quantity);
         await updateDoc(doc(db, "stock_items", existingItem.id), {
           quantity: newQuantity,
@@ -3743,7 +3754,7 @@ const StockPanel = () => {
 
   const saveInlineEdit = async (item: any) => {
     try {
-      const isItemValueOnly = item.name === 'EXBOOK';
+      const isItemValueOnly = item.name === 'EXBOOK' || item.name === 'STATIONERY';
       await updateDoc(doc(db, "stock_items", item.id), {
         quantity: Number(inlineQuantity),
         rate: isItemValueOnly ? 1 : Number(inlineRate),
@@ -3783,14 +3794,14 @@ const StockPanel = () => {
                className="p-2 border rounded-xl w-full"
              />
              <datalist id="product-suggestions">
-               {PRODUCTS.filter(p => p.name !== "Total tissue").map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+               {PRODUCTS.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
              </datalist>
           </div>
           <select value={dealer} onChange={(e) => setDealer(e.target.value)} className="p-2 border rounded-xl bg-white">
              {DEALERS.map(d => <option key={d.name} value={d.name}>{d.name} ({d.id})</option>)}
           </select>
           {isValueOnly ? (
-            <div className="col-span-1 md:col-span-2">
+            <div className="col-span-1 md:col-span-3">
               <Input type="number" placeholder="Value (৳)" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
             </div>
           ) : (
@@ -3850,7 +3861,7 @@ const StockPanel = () => {
                           </div>
                         ) : `৳${item.rate}`}
                       </td>
-                      <td className="px-4 py-4 font-black text-primary">৳{((item.quantity || 0) * (item.rate || 0)).toLocaleString()}</td>
+                      <td className="px-4 py-4 font-black text-primary">৳{(item.name === 'STATIONERY' ? (item.quantity) : ((item.quantity || 0) * (item.rate || 0))).toLocaleString()}</td>
                       <td className="px-4 py-4">
                         <div className="flex gap-2">
                           {inlineEditId === item.id ? (
@@ -3893,7 +3904,7 @@ const StockPanel = () => {
                     <tr key={item.id} className="bg-white border-b border-slate-100">
                       <td className="px-4 py-4 font-bold">{item.name}</td>
                       <td className="px-4 py-4 text-center">
-                        {item.name === 'EXBOOK' ? (
+                        {(item.name === 'EXBOOK' || item.name === 'STATIONERY') ? (
                           <span className="text-slate-300 font-bold">-</span>
                         ) : inlineEditId === item.id ? (
                           <input type="number" 
@@ -3903,7 +3914,7 @@ const StockPanel = () => {
                         ) : item.quantity}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        {item.name === 'EXBOOK' ? (
+                        {(item.name === 'EXBOOK' || item.name === 'STATIONERY') ? (
                           <span className="text-slate-300 font-bold">-</span>
                         ) : inlineEditId === item.id ? (
                           <div className="flex items-center justify-center">
@@ -3916,7 +3927,7 @@ const StockPanel = () => {
                         ) : `৳${item.rate}`}
                       </td>
                       <td className="px-4 py-4 font-black text-primary">
-                        {inlineEditId === item.id && item.name === 'EXBOOK' ? (
+                        {inlineEditId === item.id && (item.name === 'EXBOOK' || item.name === 'STATIONERY') ? (
                            <div className="flex items-center">
                             <span className="mr-1">৳</span>
                             <input type="number" 
@@ -3924,7 +3935,7 @@ const StockPanel = () => {
                                    onChange={e => setInlineQuantity(e.target.value)} 
                                    className="w-24 p-2 border border-slate-300 rounded-lg outline-none focus:border-primary relative z-10" />
                           </div>
-                        ) : `৳${((item.quantity || 0) * (item.rate || 0)).toLocaleString()}`}
+                        ) : `৳${((item.name === 'EXBOOK' || item.name === 'STATIONERY') ? (item.quantity || 0) : ((item.quantity || 0) * (item.rate || 0))).toLocaleString()}`}
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex gap-2">
@@ -3949,7 +3960,7 @@ const StockPanel = () => {
                     <td className="px-4 py-4 font-black text-emerald-600 text-lg">
                       ৳{stock
                         .filter(item => item.dealer === d.name)
-                        .reduce((acc, curr) => acc + ((curr.quantity || 0) * (curr.rate || 0)), 0)
+                        .reduce((acc, curr) => acc + ((curr.name === 'EXBOOK' || curr.name === 'STATIONERY') ? (curr.quantity || 0) : ((curr.quantity || 0) * (curr.rate || 0))), 0)
                         .toLocaleString()
                       }
                     </td>
@@ -4088,7 +4099,7 @@ const AdminPanel = () => {
         group.originalIds.push(entry.id);
         const val = Number(entry.value) || 0;
         if (entry.productName === 'Total tissue') group.tissue += val;
-        else if (entry.productName === 'BALLPEN') group.ballpen += val;
+        else if (entry.productName.includes('BALLPEN')) group.ballpen += val;
         else if (entry.productName === 'EXBOOK') group.exbook += val;
         else if (entry.productName === 'STATIONERY') group.stationery += val;
       });
@@ -4120,8 +4131,8 @@ const AdminPanel = () => {
           
           if (docSnap.exists()) {
             const data = docSnap.data();
-            const requiresValueOnly = data.productName === 'EXBOOK' || data.productName === 'Total tissue';
-            const amountToRestore = requiresValueOnly ? Number(data.value) : Number(data.pieces);
+            const usesValueForStock = data.productName === 'EXBOOK' || data.productName === 'STATIONERY' || data.productName === 'Total tissue';
+            const amountToRestore = usesValueForStock ? Number(data.value) : Number(data.pieces);
             
             if (amountToRestore && amountToRestore > 0 && data.productName !== 'Total tissue') {
               if (data.userId) {
@@ -4192,7 +4203,7 @@ const AdminPanel = () => {
           const data = docSnap.data();
           let newValue = data.value;
           if (data.productName === 'Total tissue') newValue = Number(editValues.tissue);
-          else if (data.productName === 'BALLPEN') newValue = Number(editValues.ballpen);
+          else if (data.productName.includes('BALLPEN')) newValue = Number(editValues.ballpen);
           else if (data.productName === 'EXBOOK') newValue = Number(editValues.exbook);
           else if (data.productName === 'STATIONERY') newValue = Number(editValues.stationery);
           
@@ -4783,6 +4794,10 @@ export default function App() {
                           <Link to="/product" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-primary mr-4 transition-colors flex items-center gap-1">
                             <Package className="w-3 h-3" />
                             Product
+                          </Link>
+                          <Link to="/stock" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-primary mr-4 transition-colors flex items-center gap-1">
+                            <Package className="w-3 h-3" />
+                            Stock
                           </Link>
                           <Link to="/admin" className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-primary transition-colors flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" />
