@@ -4470,22 +4470,22 @@ const AdminPanel = () => {
       </div>
 
       {/* Item Totals Grid */}
-      <div className="grid grid-cols-4 bg-white border-b border-slate-100">
-        <div className="p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
-          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Tissue</p>
-          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalTissue.toLocaleString()}</span>
+      <div className="grid grid-cols-2 md:grid-cols-4 bg-white border-b border-slate-100">
+        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center border-r md:border-b-0 border-b border-slate-50">
+          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Tissue</p>
+          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalTissue.toLocaleString()}</span>
         </div>
-        <div className="p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
-          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Ballpen</p>
-          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalBallpen.toLocaleString()}</span>
+        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center md:border-r border-b md:border-b-0 border-slate-50">
+          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Ballpen</p>
+          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalBallpen.toLocaleString()}</span>
         </div>
-        <div className="p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
-          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Exbook</p>
-          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalExbook.toLocaleString()}</span>
+        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
+          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Exbook</p>
+          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalExbook.toLocaleString()}</span>
         </div>
-        <div className="p-8 flex flex-col items-center justify-center text-center">
-          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Stationery</p>
-          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalStationery.toLocaleString()}</span>
+        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center">
+          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Stationery</p>
+          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalStationery.toLocaleString()}</span>
         </div>
       </div>
 
