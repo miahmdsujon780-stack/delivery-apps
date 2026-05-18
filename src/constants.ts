@@ -19,10 +19,10 @@ export const PRODUCTS = [
 ];
 
 export const SALES_OFFICERS = [
-  { name: "Sumit Das", id: "136425", photo: "" },
-  { name: "Priyas Malakar", id: "111978", photo: "" },
   { name: "Fazlur Rahman", id: "078211", photo: "" },
+  { name: "Priyas Malakar", id: "111978", photo: "" },
   { name: "Ridoy Ahmed", id: "169123", photo: "" },
+  { name: "Sumit Das", id: "136425", photo: "" },
   { name: "Promit Das", id: "175441", photo: "" },
 ];
 

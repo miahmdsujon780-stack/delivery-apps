@@ -221,10 +221,10 @@ const Login = ({ onLoginSuccess }: {
 
       await setDoc(doc(db, 'users', user.uid), profile, { merge: true });
       // The listener in AttendanceApp will pick up the full profile (including assignedLocation)
-      toast.success(`স্বাগতম, ${selectedSO}!`);
+      toast.success(`Welcome, ${selectedSO}!`);
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user') {
-        toast.info("লগইন বাতিল করা হয়েছে।");
+        toast.info("Login cancelled.");
         return;
       }
       handleFirestoreError(error, OperationType.WRITE, `users/${auth.currentUser?.uid || 'unknown'}`);
@@ -438,11 +438,11 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
 
   const handlePinLocation = async (lat: number, lon: number) => {
     if (!selectedOfficerForLoc) {
-      toast.error("প্রথমে একজন অফিসার সিলেক্ট করুন");
+      toast.error("Please select an officer first");
       return;
     }
     if (!locName) {
-      toast.error("জায়গার নাম লিখুন (যেমন: অফিস বা গোলাপগঞ্জ)");
+      toast.error("Enter location name (e.g. Office or Gulapgonj)");
       return;
     }
 
@@ -459,7 +459,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
       // Store by Officer Name for persistence even before login
       await setDoc(doc(db, 'assigned_locations', selectedOfficerForLoc), locationData);
       
-      toast.success(`সাফল্য! ${selectedOfficerForLoc}-এর পিন সেট করা হয়েছে: ${locName}`);
+      toast.success(`Success! Pin set for ${selectedOfficerForLoc}: ${locName}`);
     } catch (error: any) {
       console.error("Pin error:", error);
       toast.error(`Error: ${error.message || "Failed to pin location"}`);
@@ -907,8 +907,8 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
     
     if (roundedCurrent < expectedValue && expectedValue > 0) {
       setWarningMessage({
-        title: "টিস্যু লক্ষ্যমাত্রার চেয়ে পিছিয়ে আছেন!",
-        body: `বর্তমান অর্জন: ৳${roundedCurrent.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nআজকে পর্যন্ত হওয়ার কথা ছিল : ৳${expectedValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}\nশর্টফল (Shortfall): ৳${shortfall.toLocaleString('en-IN', {maximumFractionDigits: 0})}\n\nদয়া করে লক্ষ্যমাত্রা পূরণে আরও নজর দিন।`,
+        title: "You are behind the Tissue target!",
+        body: `Current Achievement: ৳${roundedCurrent.toLocaleString()}\nExpected until today: ৳${expectedValue.toLocaleString()}\nShortfall: ৳${shortfall.toLocaleString()}\n\nPlease focus more on reaching your target.`,
         dailyTarget: dailyTargetForPopup,
         remainingDays: remainingWorkingDaysCount
       });
@@ -942,10 +942,10 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                 <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">{warningMessage.title}</h2>
                 <div className="flex gap-2 mb-4">
                   <div className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg uppercase tracking-widest border border-amber-200">
-                    আজকের টার্গেট: ৳{warningMessage.dailyTarget.toLocaleString('en-IN')}
+                    Today's Target: ৳{warningMessage.dailyTarget.toLocaleString()}
                   </div>
                   <div className="text-xs font-bold text-white bg-red-600 px-3 py-2 rounded-lg uppercase tracking-widest">
-                    আর ডেলিভারি আছে : {warningMessage.remainingDays} দিন
+                    Remaining: {warningMessage.remainingDays} Days
                   </div>
                 </div>
                 <p className="text-xs font-bold text-slate-500 mb-8 leading-relaxed whitespace-pre-line">
@@ -955,7 +955,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                   onClick={() => setShowWarningModal(false)}
                   className="w-full bg-slate-900 text-white font-black uppercase tracking-widest text-xs py-4 rounded-2xl hover:bg-slate-800 transition-colors"
                 >
-                  আমি বুঝতে পেরেছি
+                  I Understand
                 </button>
               </div>
             </motion.div>
@@ -1314,19 +1314,19 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                   <div className="grid grid-cols-4 gap-4 pt-4 border-t border-slate-50 pb-2">
                     <div className="text-center">
                       <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Tissue</p>
-                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{group.tissueV}</p>
+                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{group.tissueV.toLocaleString()}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Ballpen</p>
-                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{group.ballpenV}</p>
+                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{group.ballpenV.toLocaleString()}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Exbook</p>
-                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{group.exbookV}</p>
+                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{group.exbookV.toLocaleString()}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Stationery</p>
-                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{group.stationeryV}</p>
+                      <p className="text-[9px] font-bold text-emerald-600 mt-1">৳{(group.stationeryV || 0).toLocaleString()}</p>
                     </div>
                   </div>
                 </motion.div>
@@ -1450,7 +1450,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                               setMapCenter([lat, lon]);
                               handlePinLocation(lat, lon);
                             } else {
-                              toast.error("ভুল কোঅর্ডিনেট (উদা: 24.8949, 91.8687)");
+                              toast.error("Invalid coordinate (e.g. 24.8949, 91.8687)");
                             }
                           }
                         }
@@ -1468,10 +1468,10 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                             setMapCenter([lat, lon]);
                             handlePinLocation(lat, lon);
                           } else {
-                            toast.error("ভুল কোঅর্ডিনেট (উদা: 24.8949, 91.8687)");
+                            toast.error("Invalid coordinate (e.g. 24.8949, 91.8687)");
                           }
                         } else {
-                          toast.error("ভুল ফরম্যাট (উদা: 24.8949, 91.8687)");
+                          toast.error("Invalid format (e.g. 24.8949, 91.8687)");
                         }
                       }}
                     >
@@ -1555,7 +1555,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                         disabled={pinLoading}
                         className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-600 hover:bg-red-700 text-white font-black text-[10px] px-6 py-5 rounded-full shadow-2xl border-4 border-white z-30 tracking-widest active:scale-95 transition-all"
                       >
-                        {pinLoading ? "সেভ হচ্ছে..." : "পিন সেট করুন"}
+                        {pinLoading ? "Setting Pin..." : "Set Pin"}
                       </Button>
                     </div>
 
@@ -1642,7 +1642,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                                        setSelectedOfficerForLoc(so.name);
                                      }}
                                      className="h-6 w-6 p-0 text-indigo-500 hover:bg-indigo-50"
-                                     title="ফোকাস অন ম্যাপ"
+                                     title="Focus on Map"
                                    >
                                      <MapPin className="w-3 h-3" />
                                    </Button>
@@ -1651,7 +1651,7 @@ const Dashboard = ({ userProfile, systemConfig, setSystemConfig }: { userProfile
                                      size="sm" 
                                      onClick={() => handleRemovePin(so.name)}
                                      className="h-6 w-6 p-0 text-red-500 hover:bg-red-50"
-                                     title="রিমুভ পিন"
+                                     title="Remove Pin"
                                    >
                                      <Trash2 className="w-3 h-3" />
                                    </Button>
@@ -1968,13 +1968,13 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     const requiresValueOnly = selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue';
 
     if (requiresValueOnly && !value) {
-      toast.error("মূল্য প্রদান করুন");
+      toast.error("Please enter value");
       return;
     } else if (requiresBoth && (!pieces || !value)) {
-      toast.error("পরিমাণ এবং মূল্য প্রদান করুন");
+      toast.error("Please enter quantity and value");
       return;
     } else if (!requiresValueOnly && !requiresBoth && !pieces) {
-      toast.error("পরিমাণ প্রদান করুন");
+      toast.error("Please enter quantity");
       return;
     }
 
@@ -1987,7 +1987,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
     };
     setPendingOrderItems(prev => [...prev, newItem]);
     
-    toast.success(`${selectedProduct} যোগ করা হয়েছে`);
+    toast.success(`${selectedProduct} added`);
     setSelectedProduct(null);
     setPieces('');
     setValue('');
@@ -1999,7 +1999,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const [pendingOrderItems, setPendingOrderItems] = useState<any[]>([]);
 
   const handleDeleteRecord = async (id: string) => {
-    if (!window.confirm("আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?")) return;
+    if (!window.confirm("Are you sure you want to delete this record?")) return;
     try {
       const record = records.find(r => r.id === id);
       if (record && !id.includes('_')) {
@@ -2036,7 +2036,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
       } else {
         await deleteDoc(doc(db, 'product_entries', id));
       }
-      toast.success("রেকর্ডটি মুছে ফেলা হয়েছে");
+      toast.success("Record deleted");
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'product_entries');
     }
@@ -2090,7 +2090,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
         });
       }
       setEditingId(null);
-      toast.success("রেকর্ডটি আপডেট করা হয়েছে");
+      toast.success("Record updated");
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'product_entries');
     }
@@ -2198,7 +2198,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
       <div className="mb-6 text-center space-y-4">
         <div>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1 mb-4">
-            {isAdmin ? 'Product Records • প্রোডাক্ট তথ্য' : 'Delivery summary • ডেলিভারি সামারি'}
+            {isAdmin ? 'Product Records' : 'Delivery Summary'}
           </p>
           
           <div className="flex bg-slate-100 p-1 rounded-xl max-w-sm mx-auto mb-4">
@@ -2281,15 +2281,15 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
               <Button 
                 onClick={async () => {
                    if (!route || !route.trim()) {
-                     toast.error("রুটের নাম প্রদান করুন");
+                     toast.error("Please enter route name");
                      return;
                    }
                    if (!memo || !memo.trim()) {
-                     toast.error("Memo প্রদান করুন");
+                     toast.error("Please enter Memo");
                      return;
                    }
                    if (pendingOrderItems.length === 0) {
-                     toast.error("কোনো প্রোডাক্ট যোগ করা হয়নি");
+                     toast.error("No product added");
                      return;
                    }
 
@@ -2299,7 +2299,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                      const assignedDealer = DEALERS.find(d => d.id === userProfile.dealerId);
                      
                      if (!assignedDealer) {
-                        toast.error("আপনার কোনো ডিলার অ্যাসাইন করা নেই।");
+                        toast.error("No dealer assigned to you.");
                         setIsSubmitting(false);
                         return;
                      }
@@ -2321,14 +2321,14 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                            const stockDoc = stockSnap.docs[0];
                            const currentQuantity = Number(stockDoc.data().quantity || 0);
                            if (currentQuantity < amountToDeduct) {
-                             throw new Error(`স্টক অপর্যাপ্ত: ${item.productName}`);
+                             throw new Error(`Insufficient stock: ${item.productName}`);
                            }
                            batch.update(doc(db, "stock_items", stockDoc.id), {
                              quantity: currentQuantity - amountToDeduct,
                              updatedAt: serverTimestamp()
                            });
                          } else {
-                           throw new Error(`স্টক পাওয়া যায়নি: ${item.productName}`);
+                           throw new Error(`Stock not found: ${item.productName}`);
                          }
                        }
 
@@ -2352,10 +2352,10 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                      setPendingOrderItems([]);
                      setRoute('');
                      setMemo('');
-                     toast.success("সকল প্রোডাক্ট সফলভাবে সাবমিট করা হয়েছে");
+                     toast.success("All products submitted successfully");
                    } catch (err: any) {
                      console.error(err);
-                     toast.error(err.message || "সাবমিশনে সমস্যা হয়েছে");
+                     toast.error(err.message || "Submission failed");
                    } finally {
                      setIsSubmitting(false);
                    }
@@ -2641,14 +2641,14 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
               <div className="text-center mb-6">
                 <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{selectedProduct}</h3>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">
-                  {(selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue') ? 'মূল্য প্রদান করুন' : ((selectedProduct || '').includes('BALLPEN') || selectedProduct === 'STATIONERY') ? 'পরিমাণ এবং মূল্য প্রদান করুন' : 'পরিমাণ প্রদান করুন'}
+                  {(selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue') ? 'Please enter value' : ((selectedProduct || '').includes('BALLPEN') || selectedProduct === 'STATIONERY') ? 'Please enter quantity and value' : 'Please enter quantity'}
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {(selectedProduct !== 'EXBOOK' && selectedProduct !== 'Total tissue') && (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Pieces (পিস)</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Pieces</label>
                     <input
                       type="number"
                       value={pieces}
@@ -2661,7 +2661,7 @@ const Product = ({ userProfile }: { userProfile: UserProfile | null }) => {
                 )}
                 {(selectedProduct === 'EXBOOK' || selectedProduct === 'Total tissue' || (selectedProduct || '').includes('BALLPEN') || selectedProduct === 'STATIONERY') && (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Value (মূল্য)</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Value</label>
                     <input
                       type="number"
                       value={value}
@@ -2935,7 +2935,7 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
   const handleMarkAttendance = async () => {
     if (!userProfile || myTodayRecord) return;
     if (!capturedPhoto) {
-      toast.error("প্রথমে আপনার একটি ছবি (Selfie) তুলুন।");
+      toast.error("Please take a selfie first.");
       await startCamera();
       return;
     }
@@ -3030,7 +3030,7 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
           const maxAllowed = finalLock.radius || 200;
           
           if (dist > maxAllowed) {
-            toast.error(`লোকেশন লক করা হয়েছে! আপনি ${finalLock.name} থেকে ${Math.round(dist)} মিটার দূরে আছেন। চেক-ইন করার জন্য আপনাকে ওই এলাকার ${maxAllowed} মিটারের মধ্যে থাকতে হবে।`, {
+            toast.error(`Location Locked! You are ${Math.round(dist)} meters away from ${finalLock.name}. You must be within ${maxAllowed} meters to check-in.`, {
               duration: 10000,
               icon: '📍'
             });
@@ -3050,12 +3050,12 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
         
         // Block if location is required but GPS failed
         if (finalLock) {
-          toast.error("লোকেশন যাচাই করা যাচ্ছে না। দয়া করে আপনার ফোনের GPS (Location) অপশনটি চালু করুন এবং এই অ্যাপটিকে পারমিশন দিন।");
+          toast.error("Location cannot be verified. Please turn on your phone's GPS (Location) and grant permission to this app.");
           setSubmitting(false);
           return;
         }
         
-        toast.warning("GPS সিগন্যাল পাওয়া যায়নি। লোকেশন ছাড়াই সেভ করা হচ্ছে।");
+        toast.warning("GPS signal not found. Saving without location.");
       }
 
       const attendanceData = {
@@ -3073,7 +3073,7 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
 
       await addDoc(collection(db, 'attendance'), attendanceData);
       
-      toast.success("হাজিরা সফলভাবে সম্পন্ন হয়েছে!");
+      toast.success("Attendance marked successfully!");
       setCapturedPhoto(null);
       setRecords(prev => [{ ...attendanceData, timestamp: new Date() } as AttendanceEntry, ...prev]);
     } catch (error) {
@@ -3133,7 +3133,7 @@ const Attendance = ({ userProfile }: { userProfile: UserProfile | null }) => {
 
               {bgLocation && getDistance(bgLocation.lat, bgLocation.lon, lockLocation.lat, lockLocation.lon) > (lockLocation.radius || 200) && (
                 <div className="mt-3 bg-white text-red-600 p-2 rounded-xl text-center shadow-inner font-black text-[10px] uppercase">
-                   ⚠️ আপনি সীমার বাইরে আছেন। চেক-ইন করতে {lockLocation.name} এ যান।
+                   ⚠️ You are outside the limit. Go to {lockLocation.name} to check-in.
                 </div>
               )}
             </motion.div>
@@ -4116,7 +4116,7 @@ const AdminPanel = () => {
   }, []);
 
   const handleDelete = async (entry: any) => {
-    const confirmDelete = window.confirm("আপনি কি এই এন্ট্রিটি মুছে ফেলতে চান?");
+    const confirmDelete = window.confirm("Are you sure you want to delete this entry?");
     if (!confirmDelete) return;
 
     try {
@@ -4257,15 +4257,15 @@ const AdminPanel = () => {
 
   const handleClearAll = async () => {
     if (filtered.length === 0) {
-      toast.error("মুছে ফেলার জন্য কোনো ডাটা নেই");
+      toast.error("No data to delete");
       return;
     }
     
     const targetMsg = filterSO === 'all' 
-      ? "সকল অফিসারের সকল ডেলিভারি রিপোর্ট" 
-      : `${filterSO}-এর সকল ডেলিভারি রিপোর্ট`;
+      ? "all delivery reports of all officers" 
+      : `all delivery reports of ${filterSO}`;
       
-    const confirmClear = window.confirm(`⚠️ সতর্কতা: এটি ${targetMsg} স্থায়ীভাবে মুছে ফেলবে। এটি আর ফিরিয়ে আনা যাবে না। আপনি কি নিশ্চিত?`);
+    const confirmClear = window.confirm(`⚠️ WARNING: This will permanently delete ${targetMsg}. This cannot be undone. Are you sure?`);
     if (!confirmClear) return;
 
     try {
@@ -4280,7 +4280,7 @@ const AdminPanel = () => {
         }
       });
       await batch.commit();
-      toast.success(filterSO === 'all' ? "সব রিপোর্ট সফলভাবে মুছে ফেলা হয়েছে" : `${filterSO}-এর রিপোর্ট মুছে ফেলা হয়েছে`);
+      toast.success(filterSO === 'all' ? "All reports deleted successfully" : `Reports of ${filterSO} deleted`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'clear_reports');
     }
@@ -4336,10 +4336,10 @@ const AdminPanel = () => {
 
   const handleClearAllAttendance = async () => {
     const targetMsg = filterSO === 'all' 
-      ? "সকল অফিসারের হাজিরা রিপোর্ট" 
-      : `${filterSO}-এর সকল হাজিরা রিপোর্ট`;
+      ? "all attendance reports of all officers" 
+      : `all attendance reports of ${filterSO}`;
 
-    const confirmClear = window.confirm(`⚠️ সতর্কতা: এটি ${targetMsg} স্থায়ীভাবে মুছে ফেলবে। আপনি কি নিশ্চিত?`);
+    const confirmClear = window.confirm(`⚠️ WARNING: This will permanently delete ${targetMsg}. Are you sure?`);
     if (!confirmClear) return;
 
     try {
@@ -4353,7 +4353,7 @@ const AdminPanel = () => {
         batch.delete(doc.ref);
       });
       await batch.commit();
-      toast.success(filterSO === 'all' ? "সব হাজিরা রিপোর্ট মুছে ফেলা হয়েছে" : `${filterSO}-এর হাজিরা রিপোর্ট মুছে ফেলা হয়েছে`);
+      toast.success(filterSO === 'all' ? "All attendance reports deleted" : `Attendance reports of ${filterSO} deleted`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'attendance');
     }
@@ -4470,22 +4470,22 @@ const AdminPanel = () => {
       </div>
 
       {/* Item Totals Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 bg-white border-b border-slate-100">
-        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center border-r md:border-b-0 border-b border-slate-50">
-          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Tissue</p>
-          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalTissue.toLocaleString()}</span>
+      <div className="grid grid-cols-4 bg-white border-b border-slate-100">
+        <div className="p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
+          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Tissue</p>
+          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalTissue.toLocaleString()}</span>
         </div>
-        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center md:border-r border-b md:border-b-0 border-slate-50">
-          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Ballpen</p>
-          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalBallpen.toLocaleString()}</span>
+        <div className="p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
+          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Ballpen</p>
+          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalBallpen.toLocaleString()}</span>
         </div>
-        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
-          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Exbook</p>
-          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalExbook.toLocaleString()}</span>
+        <div className="p-8 flex flex-col items-center justify-center text-center border-r border-slate-50">
+          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Exbook</p>
+          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalExbook.toLocaleString()}</span>
         </div>
-        <div className="p-4 md:p-8 flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] md:text-[10px] font-bold uppercase text-slate-400 mb-1.5 md:mb-2 tracking-widest leading-none">Stationery</p>
-          <span className="text-sm sm:text-base md:text-xl font-black text-slate-900 leading-none">{statistics.totalStationery.toLocaleString()}</span>
+        <div className="p-8 flex flex-col items-center justify-center text-center">
+          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 tracking-widest leading-none">Stationery</p>
+          <span className="text-xl font-black text-slate-900 leading-none">{statistics.totalStationery.toLocaleString()}</span>
         </div>
       </div>
 
@@ -4569,7 +4569,7 @@ const AdminPanel = () => {
               </div>
 
               {editingId === entry.id ? (
-                <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-50">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t border-slate-50">
                   <div className="space-y-1">
                     <Label className="text-[8px] font-bold uppercase text-slate-400">Tissue</Label>
                     <Input 
@@ -4611,19 +4611,19 @@ const AdminPanel = () => {
                 <div className="grid grid-cols-4 gap-4 pt-2 border-t border-slate-50">
                   <div className="text-center">
                     <p className="text-[9px] font-bold text-slate-400 uppercase">Tissue</p>
-                    <p className="text-sm font-black text-primary">৳{entry.tissue}</p>
+                    <p className="text-sm font-black text-primary">৳{entry.tissue.toLocaleString()}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[9px] font-bold text-slate-400 uppercase">Ballpen</p>
-                    <p className="text-sm font-black text-blue-600">৳{entry.ballpen}</p>
+                    <p className="text-sm font-black text-blue-600">৳{entry.ballpen.toLocaleString()}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[9px] font-bold text-slate-400 uppercase">Exbook</p>
-                    <p className="text-sm font-black text-indigo-600">৳{entry.exbook}</p>
+                    <p className="text-sm font-black text-indigo-600">৳{entry.exbook.toLocaleString()}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-[9px] font-bold text-slate-400 uppercase">Stationery</p>
-                    <p className="text-sm font-black text-emerald-600">৳{entry.stationery || 0}</p>
+                    <p className="text-sm font-black text-emerald-600">৳{(entry.stationery || 0).toLocaleString()}</p>
                   </div>
                 </div>
               )}
